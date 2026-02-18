@@ -182,11 +182,11 @@ EOF
 args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --yes|-y)
+        --yes | -y)
             export ST_AUTO_CONFIRM="true"
             shift
             ;;
-        --quiet|-q)
+        --quiet | -q)
             export ST_QUIET="true"
             shift
             ;;

@@ -45,9 +45,18 @@ cli_database() {
             local name="" user="" password=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --user) user="$2"; shift 2 ;;
-                    --password) password="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --user)
+                        user="$2"
+                        shift 2
+                        ;;
+                    --password)
+                        password="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -58,8 +67,14 @@ cli_database() {
             local name="" user=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --user) user="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --user)
+                        user="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -70,9 +85,18 @@ cli_database() {
             local name="" user="" drop_user="false"
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --user) user="$2"; shift 2 ;;
-                    --drop-user) drop_user="true"; shift ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --user)
+                        user="$2"
+                        shift 2
+                        ;;
+                    --drop-user)
+                        drop_user="true"
+                        shift
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -87,7 +111,10 @@ cli_database() {
             local name=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -101,8 +128,14 @@ cli_database() {
             local name="" file=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --file) file="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --file)
+                        file="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -113,8 +146,14 @@ cli_database() {
             local name="" file=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --file) file="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --file)
+                        file="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -125,8 +164,14 @@ cli_database() {
             local name="" output=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --output) output="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --output)
+                        output="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -140,7 +185,10 @@ cli_database() {
             local name=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -151,9 +199,18 @@ cli_database() {
             local name="" user="" level="all"
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --name) name="$2"; shift 2 ;;
-                    --user) user="$2"; shift 2 ;;
-                    --level) level="$2"; shift 2 ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
+                    --user)
+                        user="$2"
+                        shift 2
+                        ;;
+                    --level)
+                        level="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -169,14 +226,17 @@ cli_database() {
             local user=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --user) user="$2"; shift 2 ;;
+                    --user)
+                        user="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
             [[ -z "$user" ]] && cli_usage "db grants" "--user <user>"
             show_grants "$user"
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools db <action> [options]
 
@@ -216,10 +276,22 @@ cli_vhost() {
             local domain="" php="" aliases="" docroot=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --php) php="$2"; shift 2 ;;
-                    --aliases) aliases="$2"; shift 2 ;;
-                    --docroot) docroot="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --php)
+                        php="$2"
+                        shift 2
+                        ;;
+                    --aliases)
+                        aliases="$2"
+                        shift 2
+                        ;;
+                    --docroot)
+                        docroot="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -230,7 +302,10 @@ cli_vhost() {
             local domain=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -244,8 +319,14 @@ cli_vhost() {
             local domain="" version=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --version) version="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --version)
+                        version="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -256,7 +337,10 @@ cli_vhost() {
             local domain=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -267,16 +351,25 @@ cli_vhost() {
             local from="" to="" code="301"
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --from) from="$2"; shift 2 ;;
-                    --to) to="$2"; shift 2 ;;
-                    --code) code="$2"; shift 2 ;;
+                    --from)
+                        from="$2"
+                        shift 2
+                        ;;
+                    --to)
+                        to="$2"
+                        shift 2
+                        ;;
+                    --code)
+                        code="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
             [[ -z "$from" || -z "$to" ]] && cli_usage "vhost redirect" "--from <domain> --to <url> [--code 301|302]"
             create_redirect "$from" "$to" "$code"
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools vhost <action> [options]
 
@@ -310,8 +403,14 @@ cli_ssl() {
             local domain="" email=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --email) email="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --email)
+                        email="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -322,7 +421,10 @@ cli_ssl() {
             local domain=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -333,8 +435,14 @@ cli_ssl() {
             local domain="" provider=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --provider) provider="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --provider)
+                        provider="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -348,7 +456,10 @@ cli_ssl() {
             local days=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --days) days="$2"; shift 2 ;;
+                    --days)
+                        days="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -357,7 +468,7 @@ cli_ssl() {
         renew)
             setup_ssl_renewal
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools ssl <action> [options]
 
@@ -391,21 +502,33 @@ cli_cron() {
             local schedule="" command="" name=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --schedule) schedule="$2"; shift 2 ;;
-                    --command) command="$2"; shift 2 ;;
-                    --name) name="$2"; shift 2 ;;
+                    --schedule)
+                        schedule="$2"
+                        shift 2
+                        ;;
+                    --command)
+                        command="$2"
+                        shift 2
+                        ;;
+                    --name)
+                        name="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
-            [[ -z "$schedule" || -z "$command" || -z "$name" ]] && \
-                cli_usage "cron add" "--schedule '<cron>' --command '<cmd>' --name '<name>'"
+            [[ -z "$schedule" || -z "$command" || -z "$name" ]] \
+                && cli_usage "cron add" "--schedule '<cron>' --command '<cmd>' --name '<name>'"
             add_cron "$schedule" "$command" "$name"
             ;;
         remove)
             local pattern=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --pattern) pattern="$2"; shift 2 ;;
+                    --pattern)
+                        pattern="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -415,7 +538,7 @@ cli_cron() {
         list)
             list_crons
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools cron <action> [options]
 
@@ -454,9 +577,18 @@ cli_logs() {
             local domain="" lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --lines) lines="$2"; shift 2 ;;
-                    --errors) action="apache-errors"; shift ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --lines)
+                        lines="$2"
+                        shift 2
+                        ;;
+                    --errors)
+                        action="apache-errors"
+                        shift
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -470,8 +602,14 @@ cli_logs() {
             local domain="" lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --domain) domain="$2"; shift 2 ;;
-                    --lines) lines="$2"; shift 2 ;;
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --lines)
+                        lines="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -481,7 +619,10 @@ cli_logs() {
             local lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --lines) lines="$2"; shift 2 ;;
+                    --lines)
+                        lines="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -491,8 +632,14 @@ cli_logs() {
             local lines="" filter=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --lines) lines="$2"; shift 2 ;;
-                    --filter) filter="$2"; shift 2 ;;
+                    --lines)
+                        lines="$2"
+                        shift 2
+                        ;;
+                    --filter)
+                        filter="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -502,15 +649,21 @@ cli_logs() {
             local pattern="" lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --pattern) pattern="$2"; shift 2 ;;
-                    --lines) lines="$2"; shift 2 ;;
+                    --pattern)
+                        pattern="$2"
+                        shift 2
+                        ;;
+                    --lines)
+                        lines="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
             [[ -z "$pattern" ]] && cli_usage "logs search" "--pattern <text> [--lines <n>]"
             search_logs "$pattern" "${lines:-$ST_LOG_LINES}"
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools logs <action> [options]
 
@@ -550,8 +703,14 @@ cli_firewall() {
             local port="" proto=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --port) port="$2"; shift 2 ;;
-                    --proto) proto="$2"; shift 2 ;;
+                    --port)
+                        port="$2"
+                        shift 2
+                        ;;
+                    --proto)
+                        proto="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
@@ -562,15 +721,21 @@ cli_firewall() {
             local port="" proto=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --port) port="$2"; shift 2 ;;
-                    --proto) proto="$2"; shift 2 ;;
+                    --port)
+                        port="$2"
+                        shift 2
+                        ;;
+                    --proto)
+                        proto="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
             [[ -z "$port" ]] && cli_usage "firewall deny" "--port <port> [--proto tcp|udp]"
             deny_port "$port" "$proto"
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools firewall <action> [options]
 
@@ -607,14 +772,17 @@ cli_fail2ban() {
             local ip=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
-                    --ip) ip="$2"; shift 2 ;;
+                    --ip)
+                        ip="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
             [[ -z "$ip" ]] && cli_usage "fail2ban unban" "--ip <address>"
             unban_ip "$ip"
             ;;
-        --help|-h|"")
+        --help | -h | "")
             cat <<EOF
 Usage: server-tools fail2ban <action> [options]
 
@@ -640,11 +808,11 @@ EOF
 parse_global_flags() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --yes|-y)
+            --yes | -y)
                 export ST_AUTO_CONFIRM="true"
                 shift
                 ;;
-            --quiet|-q)
+            --quiet | -q)
                 export ST_QUIET="true"
                 shift
                 ;;
