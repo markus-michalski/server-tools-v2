@@ -323,7 +323,7 @@ delete_database() {
     if [[ -n "$username" ]] && [[ "$drop_user" == "true" ]]; then
         validate_input "$username" "username" || return 1
         log_info "Dropping user '$username'..."
-        drop_user_only "$username"
+        drop_user_only "$username" || log_warn "Failed to drop user '$username'"
     fi
 
     remove_credentials "$db_name"

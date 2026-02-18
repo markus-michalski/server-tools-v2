@@ -51,7 +51,11 @@ press_enter() {
 # =============================================================================
 
 database_menu() {
-    load_mysql_credentials
+    if ! load_mysql_credentials; then
+        log_error "Cannot connect to MySQL. Check /root/.my.cnf"
+        press_enter
+        return
+    fi
     local submenu=true
 
     while $submenu; do
@@ -93,8 +97,12 @@ database_menu() {
                 list_databases || true
                 echo ""
                 read -r -p "Database to delete: " db_name
-                read -r -p "User to delete: " db_user
-                delete_database "$db_name" "$db_user" || true
+                read -r -p "User to delete (empty to keep): " db_user
+                local drop_user="false"
+                if [[ -n "$db_user" ]]; then
+                    drop_user="true"
+                fi
+                delete_database "$db_name" "$db_user" "$drop_user" || true
                 press_enter
                 ;;
             5)

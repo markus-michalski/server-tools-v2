@@ -333,7 +333,10 @@ change_php_version() {
     log_info "Changing PHP version for '$domain' to $php_version..."
 
     # Backup before modification
-    cp "$config" "${config}.backup"
+    if ! cp "$config" "${config}.backup"; then
+        log_error "Failed to backup configuration"
+        return 1
+    fi
 
     # Replace PHP version in config
     if ! sed -i "s|proxy:unix:/run/php/php[0-9.]*-fpm.sock|proxy:unix:/run/php/php${php_version}-fpm.sock|g" "$config"; then
