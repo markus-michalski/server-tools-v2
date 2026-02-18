@@ -41,7 +41,7 @@ install_tools() {
         if [[ -f "$example_conf" ]]; then
             cp "$example_conf" "$ST_CONFIG_FILE"
         else
-            cat > "$ST_CONFIG_FILE" <<'CONFIGEOF'
+            cat >"$ST_CONFIG_FILE" <<'CONFIGEOF'
 # Server Tools Configuration
 # Uncomment and modify values as needed
 

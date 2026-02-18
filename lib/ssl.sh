@@ -176,7 +176,7 @@ check_expiring_soon() {
                 local expiry_epoch now_epoch days_left
                 expiry_epoch=$(date -d "$(openssl x509 -in "$cert_file" -noout -enddate | cut -d= -f2)" +%s 2>/dev/null)
                 now_epoch=$(date +%s)
-                days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+                days_left=$(((expiry_epoch - now_epoch) / 86400))
 
                 if [[ $days_left -le $days ]]; then
                     echo "  $domain: expires in $days_left days"
@@ -204,7 +204,7 @@ setup_ssl_renewal() {
         install -m 755 "$renewal_src" "$renewal_dest"
     else
         # Generate inline if source not available
-        cat > "$renewal_dest" <<'RENEWEOF'
+        cat >"$renewal_dest" <<'RENEWEOF'
 #!/bin/bash
 # SSL Certificate Renewal Script
 # Runs daily via cron, renews certs expiring within 30 days
@@ -227,7 +227,7 @@ RENEWEOF
     fi
 
     # Create cron job
-    cat > "$cron_file" <<EOF
+    cat >"$cron_file" <<EOF
 # SSL Certificate Renewal - daily at 3:30 AM
 30 3 * * * root $renewal_dest
 EOF

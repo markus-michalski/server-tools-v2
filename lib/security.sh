@@ -47,7 +47,7 @@ validate_input() {
             fi
             # Check against allowed base paths
             local allowed
-            IFS=':' read -ra allowed <<< "$ST_ALLOWED_DOCROOT_PATHS"
+            IFS=':' read -ra allowed <<<"$ST_ALLOWED_DOCROOT_PATHS"
             local path_ok=false
             for base in "${allowed[@]}"; do
                 if [[ "$normalized" == "$base"* ]]; then
@@ -131,7 +131,7 @@ audit_log() {
         chmod 600 "$ST_AUDIT_LOG"
     fi
 
-    echo "[$timestamp] [$severity] user=$user action=$action" >> "$ST_AUDIT_LOG"
+    echo "[$timestamp] [$severity] user=$user action=$action" >>"$ST_AUDIT_LOG"
 
     if [[ "$severity" == "CRITICAL" ]]; then
         log_warn "CRITICAL: $action"
@@ -158,7 +158,7 @@ safe_write_file() {
     old_umask=$(umask)
     umask 077
 
-    echo "$content" > "$file_path"
+    echo "$content" >"$file_path"
     chmod "$permissions" "$file_path"
 
     umask "$old_umask"
