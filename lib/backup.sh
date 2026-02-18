@@ -97,7 +97,10 @@ list_backups() {
     fi
 
     echo "Available backups:"
-    ls -lh "$ST_BACKUP_DIR" | grep "\.tar\.gz$" | awk '{printf "  %s  %5s  %s\n", $6" "$7" "$8, $5, $9}' || echo "  None"
+    for f in "${ST_BACKUP_DIR}"/*.tar.gz; do
+        [[ -f "$f" ]] || continue
+        echo "  $(basename "$f")  $(du -h "$f" | cut -f1)"
+    done
     echo ""
     echo "Auto-cleanup: after $ST_BACKUP_RETENTION_DAYS days"
 }
