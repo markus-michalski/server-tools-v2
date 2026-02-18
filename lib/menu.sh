@@ -75,7 +75,7 @@ database_menu() {
                 read -r -s -p "Password (empty for auto-generated): " db_pass
                 echo
                 if [[ -z "$db_pass" ]]; then
-                    db_pass=$(generate_password)
+                    db_pass=$(generate_password "")
                     log_info "Secure password generated"
                 fi
                 create_database "$db_name" "$db_user" "$db_pass" || true
@@ -343,7 +343,13 @@ system_info() {
 
     echo "Active Virtual Hosts:"
     if [[ -d "/etc/apache2/sites-enabled" ]]; then
-        ls /etc/apache2/sites-enabled/ 2>/dev/null | sed 's/\.conf$//' | sed 's/^/  - /' || echo "  (none)"
+        local vhost_found=0
+        for f in /etc/apache2/sites-enabled/*.conf; do
+            [[ -f "$f" ]] || continue
+            echo "  - $(basename "$f" .conf)"
+            vhost_found=1
+        done
+        [[ $vhost_found -eq 0 ]] && echo "  (none)"
     else
         echo "  Apache not installed"
     fi

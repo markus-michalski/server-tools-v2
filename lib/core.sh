@@ -6,7 +6,7 @@
 _CORE_SOURCED=1
 
 # Version
-readonly ST_VERSION="2.0.0"
+export ST_VERSION="2.0.0"
 
 # Color support (respects NO_COLOR: https://no-color.org/)
 if [[ -t 2 ]] && [[ -z "${NO_COLOR:-}" ]]; then

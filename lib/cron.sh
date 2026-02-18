@@ -25,7 +25,8 @@ cron_file_name() {
 # Check if a cron job file exists by name
 cron_exists() {
     local name="$1"
-    local file="/etc/cron.d/$(cron_file_name "$name")"
+    local file
+    file="/etc/cron.d/$(cron_file_name "$name")"
     [[ -f "$file" ]]
 }
 

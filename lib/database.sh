@@ -209,7 +209,7 @@ create_database() {
 
     # Auto-generate password if empty
     if [[ -z "$password" ]]; then
-        password=$(generate_password)
+        password=$(generate_password "")  # uses default length
         log_info "Generated secure password (${ST_PASSWORD_LENGTH} chars)"
     else
         validate_input "$password" "password" || return 1

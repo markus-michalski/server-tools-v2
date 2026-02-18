@@ -304,11 +304,23 @@ list_vhosts() {
     print_header "Virtual Hosts"
 
     echo "Active sites:"
-    ls /etc/apache2/sites-enabled/ 2>/dev/null | sed 's/\.conf$//' | sed 's/^/  - /' || echo "  (none)"
+    local found=0
+    for f in /etc/apache2/sites-enabled/*.conf; do
+        [[ -f "$f" ]] || continue
+        echo "  - $(basename "$f" .conf)"
+        found=1
+    done
+    [[ $found -eq 0 ]] && echo "  (none)"
 
     echo ""
     echo "Available sites:"
-    ls /etc/apache2/sites-available/ 2>/dev/null | sed 's/\.conf$//' | sed 's/^/  - /' || echo "  (none)"
+    found=0
+    for f in /etc/apache2/sites-available/*.conf; do
+        [[ -f "$f" ]] || continue
+        echo "  - $(basename "$f" .conf)"
+        found=1
+    done
+    [[ $found -eq 0 ]] && echo "  (none)"
 }
 
 # Change PHP version for an existing vhost
