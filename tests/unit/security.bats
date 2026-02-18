@@ -207,3 +207,130 @@ teardown() {
     perms=$(stat -c '%a' "$test_file")
     assert_equal "$perms" "600"
 }
+
+# --- Port validation ---
+
+@test "validate_input accepts valid port 80" {
+    run validate_input "80" "port"
+    assert_success
+}
+
+@test "validate_input accepts valid port 443" {
+    run validate_input "443" "port"
+    assert_success
+}
+
+@test "validate_input accepts valid port 65535" {
+    run validate_input "65535" "port"
+    assert_success
+}
+
+@test "validate_input accepts valid port 1" {
+    run validate_input "1" "port"
+    assert_success
+}
+
+@test "validate_input rejects port 0" {
+    run validate_input "0" "port"
+    assert_failure
+    assert_output --partial "Invalid port"
+}
+
+@test "validate_input rejects port over 65535" {
+    run validate_input "70000" "port"
+    assert_failure
+    assert_output --partial "Invalid port"
+}
+
+@test "validate_input rejects non-numeric port" {
+    run validate_input "http" "port"
+    assert_failure
+    assert_output --partial "Invalid port"
+}
+
+# --- Protocol validation ---
+
+@test "validate_input accepts tcp protocol" {
+    run validate_input "tcp" "protocol"
+    assert_success
+}
+
+@test "validate_input accepts udp protocol" {
+    run validate_input "udp" "protocol"
+    assert_success
+}
+
+@test "validate_input rejects icmp protocol" {
+    run validate_input "icmp" "protocol"
+    assert_failure
+    assert_output --partial "Invalid protocol"
+}
+
+@test "validate_input rejects empty protocol" {
+    run validate_input "" "protocol"
+    assert_failure
+}
+
+# --- IP address validation ---
+
+@test "validate_input accepts valid IPv4" {
+    run validate_input "192.168.1.1" "ip_address"
+    assert_success
+}
+
+@test "validate_input accepts IPv4 with zeros" {
+    run validate_input "0.0.0.0" "ip_address"
+    assert_success
+}
+
+@test "validate_input accepts IPv4 max octets" {
+    run validate_input "255.255.255.255" "ip_address"
+    assert_success
+}
+
+@test "validate_input rejects IP with octet over 255" {
+    run validate_input "192.168.1.256" "ip_address"
+    assert_failure
+    assert_output --partial "Invalid IP"
+}
+
+@test "validate_input rejects malformed IP" {
+    run validate_input "1.2.3" "ip_address"
+    assert_failure
+    assert_output --partial "Invalid IP"
+}
+
+@test "validate_input rejects IP with letters" {
+    run validate_input "abc.def.ghi.jkl" "ip_address"
+    assert_failure
+    assert_output --partial "Invalid IP"
+}
+
+# --- URL validation ---
+
+@test "validate_input accepts valid https URL" {
+    run validate_input "https://example.com" "url"
+    assert_success
+}
+
+@test "validate_input accepts valid http URL" {
+    run validate_input "http://example.com" "url"
+    assert_success
+}
+
+@test "validate_input accepts URL with path" {
+    run validate_input "https://example.com/path/to/page" "url"
+    assert_success
+}
+
+@test "validate_input rejects URL without protocol" {
+    run validate_input "example.com" "url"
+    assert_failure
+    assert_output --partial "Invalid URL"
+}
+
+@test "validate_input rejects ftp URL" {
+    run validate_input "ftp://example.com" "url"
+    assert_failure
+    assert_output --partial "Invalid URL"
+}

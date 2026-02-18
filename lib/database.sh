@@ -126,6 +126,123 @@ revoke_privileges() {
     mysql_cmd "FLUSH PRIVILEGES"
 }
 
+# Grant read-only (SELECT) on a database to a user
+grant_readonly() {
+    local db_name="$1"
+    local username="$2"
+    local host="${3:-localhost}"
+    local escaped_db escaped_user
+
+    escaped_db=$(mysql_escape "$db_name")
+    escaped_user=$(mysql_escape "$username")
+
+    mysql_cmd "GRANT SELECT ON \`${escaped_db}\`.* TO '${escaped_user}'@'${host}'"
+    mysql_cmd "FLUSH PRIVILEGES"
+}
+
+# Grant read-write (SELECT, INSERT, UPDATE, DELETE) on a database to a user
+grant_readwrite() {
+    local db_name="$1"
+    local username="$2"
+    local host="${3:-localhost}"
+    local escaped_db escaped_user
+
+    escaped_db=$(mysql_escape "$db_name")
+    escaped_user=$(mysql_escape "$username")
+
+    mysql_cmd "GRANT SELECT, INSERT, UPDATE, DELETE ON \`${escaped_db}\`.* TO '${escaped_user}'@'${host}'"
+    mysql_cmd "FLUSH PRIVILEGES"
+}
+
+# Show grants for a specific user
+show_user_grants() {
+    local username="$1"
+    local host="${2:-localhost}"
+    local escaped_user
+    escaped_user=$(mysql_escape "$username")
+
+    mysql_cmd "SHOW GRANTS FOR '${escaped_user}'@'${host}'" 2>/dev/null
+}
+
+# Dump a database to a compressed file
+dump_database() {
+    local db_name="$1"
+    local output_dir="${2:-$ST_DB_BACKUP_DIR}"
+    local timestamp
+    timestamp=$(date '+%Y%m%d_%H%M%S')
+    local output_file="${output_dir}/db_${db_name}_${timestamp}.sql.gz"
+
+    # Ensure output directory exists
+    if [[ ! -d "$output_dir" ]]; then
+        mkdir -p "$output_dir"
+        chmod 700 "$output_dir"
+    fi
+
+    mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
+        "$db_name" 2>/dev/null | gzip >"$output_file"
+
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        rm -f "$output_file"
+        return 1
+    fi
+
+    chmod 600 "$output_file"
+    echo "$output_file"
+}
+
+# Restore a dump file into a database
+restore_dump() {
+    local db_name="$1"
+    local dump_file="$2"
+    local escaped
+    escaped=$(mysql_escape "$db_name")
+
+    case "$dump_file" in
+        *.sql.gz)
+            gunzip -c "$dump_file" | mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" 2>&1
+            ;;
+        *.sql.zip)
+            unzip -p "$dump_file" | mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" 2>&1
+            ;;
+        *.sql)
+            mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" <"$dump_file" 2>&1
+            ;;
+        *)
+            log_error "Unsupported file format: $dump_file (expected .sql, .sql.gz, .sql.zip)"
+            return 1
+            ;;
+    esac
+}
+
+# Export a database to a specific file path
+export_to_file() {
+    local db_name="$1"
+    local output_file="$2"
+
+    # Determine compression from extension
+    case "$output_file" in
+        *.sql.gz)
+            mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
+                "$db_name" 2>/dev/null | gzip >"$output_file"
+            ;;
+        *.sql)
+            mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
+                "$db_name" >"$output_file" 2>/dev/null
+            ;;
+        *)
+            log_error "Unsupported output format: $output_file (use .sql or .sql.gz)"
+            return 1
+            ;;
+    esac
+
+    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        rm -f "$output_file"
+        return 1
+    fi
+
+    chmod 600 "$output_file"
+}
+
 # Drop a database
 drop_db_only() {
     local db_name="$1"
@@ -471,4 +588,248 @@ show_db_info() {
     else
         echo "Credentials: not stored"
     fi
+}
+
+# Backup a single database to compressed dump
+backup_database() {
+    local db_name="$1"
+
+    validate_input "$db_name" "database" || return 1
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    log_info "Backing up database '$db_name'..."
+    local dump_file
+    dump_file=$(dump_database "$db_name") || {
+        log_error "Failed to backup database '$db_name'"
+        return 1
+    }
+
+    audit_log "INFO" "Database backup: $db_name -> $dump_file"
+    log_info "Backup saved: $dump_file"
+    echo ""
+    echo "  File: $dump_file"
+    echo "  Size: $(du -h "$dump_file" 2>/dev/null | cut -f1)"
+}
+
+# Backup all non-system databases
+backup_all_databases() {
+    load_mysql_credentials || return 1
+
+    local databases
+    databases=$(mysql_cmd "SHOW DATABASES" 2>/dev/null | grep -Ev "^(Database|information_schema|performance_schema|mysql|sys)$")
+
+    if [[ -z "$databases" ]]; then
+        log_warn "No user databases found to backup"
+        return 0
+    fi
+
+    local count=0
+    local failed=0
+    log_info "Backing up all databases..."
+
+    for db in $databases; do
+        log_info "Backing up '$db'..."
+        local dump_file
+        dump_file=$(dump_database "$db") || {
+            log_error "Failed to backup '$db'"
+            ((failed++))
+            continue
+        }
+        log_info "  -> $dump_file"
+        ((count++))
+    done
+
+    audit_log "INFO" "Bulk database backup: $count succeeded, $failed failed"
+    log_info "Backup complete: $count databases backed up, $failed failed"
+}
+
+# Restore a database from a dump file
+restore_database() {
+    local db_name="$1"
+    local dump_file="$2"
+
+    validate_input "$db_name" "database" || return 1
+
+    if [[ -z "$dump_file" ]]; then
+        log_error "Dump file path is required"
+        return 1
+    fi
+
+    if [[ ! -f "$dump_file" ]]; then
+        log_error "File not found: $dump_file"
+        return 1
+    fi
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist. Create it first."
+        return 1
+    fi
+
+    echo "WARNING: This will overwrite all data in database '$db_name'"
+    confirm "Restore '$dump_file' into '$db_name'?" || {
+        echo "Aborted."
+        return 1
+    }
+
+    log_info "Restoring '$dump_file' into '$db_name'..."
+    restore_dump "$db_name" "$dump_file" || {
+        log_error "Failed to restore database '$db_name'"
+        return 1
+    }
+
+    audit_log "INFO" "Database restored: $db_name from $dump_file"
+    log_info "Database '$db_name' restored successfully"
+}
+
+# Import a SQL file into an existing database
+import_database() {
+    local db_name="$1"
+    local sql_file="$2"
+
+    validate_input "$db_name" "database" || return 1
+
+    if [[ -z "$sql_file" ]]; then
+        log_error "SQL file path is required"
+        return 1
+    fi
+
+    if [[ ! -f "$sql_file" ]]; then
+        log_error "File not found: $sql_file"
+        return 1
+    fi
+
+    # Validate file extension
+    case "$sql_file" in
+        *.sql | *.sql.gz | *.sql.zip) ;;
+        *)
+            log_error "Unsupported file format (expected .sql, .sql.gz, .sql.zip)"
+            return 1
+            ;;
+    esac
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    log_info "Importing '$sql_file' into '$db_name'..."
+    restore_dump "$db_name" "$sql_file" || {
+        log_error "Import failed"
+        return 1
+    }
+
+    audit_log "INFO" "SQL import: $sql_file -> $db_name"
+    log_info "Import into '$db_name' completed successfully"
+}
+
+# Export a database to a specific file
+export_db_to_file() {
+    local db_name="$1"
+    local output_file="${2:-}"
+
+    validate_input "$db_name" "database" || return 1
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    # Default output path
+    if [[ -z "$output_file" ]]; then
+        local timestamp
+        timestamp=$(date '+%Y%m%d_%H%M%S')
+        output_file="${ST_DB_BACKUP_DIR}/${db_name}_export_${timestamp}.sql.gz"
+    fi
+
+    log_info "Exporting '$db_name' to '$output_file'..."
+    export_to_file "$db_name" "$output_file" || {
+        log_error "Export failed"
+        return 1
+    }
+
+    audit_log "INFO" "Database export: $db_name -> $output_file"
+    log_info "Export saved: $output_file"
+    echo ""
+    echo "  File: $output_file"
+    echo "  Size: $(du -h "$output_file" 2>/dev/null | cut -f1)"
+}
+
+# Grant read-only access (high-level operation)
+grant_user_readonly() {
+    local db_name="$1"
+    local username="$2"
+
+    validate_input "$db_name" "database" || return 1
+    validate_input "$username" "username" || return 1
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    if ! user_exists "$username"; then
+        log_error "User '$username' does not exist"
+        return 1
+    fi
+
+    log_info "Granting read-only access on '$db_name' to '$username'..."
+    grant_readonly "$db_name" "$username" || return 1
+
+    audit_log "INFO" "Granted SELECT on $db_name to $username"
+    log_info "User '$username' now has read-only access to '$db_name'"
+}
+
+# Grant read-write access (high-level operation)
+grant_user_readwrite() {
+    local db_name="$1"
+    local username="$2"
+
+    validate_input "$db_name" "database" || return 1
+    validate_input "$username" "username" || return 1
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    if ! user_exists "$username"; then
+        log_error "User '$username' does not exist"
+        return 1
+    fi
+
+    log_info "Granting read-write access on '$db_name' to '$username'..."
+    grant_readwrite "$db_name" "$username" || return 1
+
+    audit_log "INFO" "Granted SELECT,INSERT,UPDATE,DELETE on $db_name to $username"
+    log_info "User '$username' now has read-write access to '$db_name'"
+}
+
+# Show grants for a user (high-level operation)
+show_grants() {
+    local username="$1"
+
+    validate_input "$username" "username" || return 1
+    load_mysql_credentials || return 1
+
+    if ! user_exists "$username"; then
+        log_error "User '$username' does not exist"
+        return 1
+    fi
+
+    print_header "Grants for: $username"
+    show_user_grants "$username" | tail -n +2 | sed 's/^/  /'
 }

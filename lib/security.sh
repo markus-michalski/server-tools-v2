@@ -88,6 +88,44 @@ validate_input() {
                 return 1
             fi
             ;;
+        port)
+            # Port number: 1-65535
+            if [[ ! "$input" =~ ^[0-9]+$ ]] || [[ "$input" -lt 1 ]] || [[ "$input" -gt 65535 ]]; then
+                log_error "Invalid port: $input (must be 1-65535)"
+                return 1
+            fi
+            ;;
+        protocol)
+            # Network protocol: tcp or udp
+            if [[ ! "$input" =~ ^(tcp|udp)$ ]]; then
+                log_error "Invalid protocol: $input (must be tcp or udp)"
+                return 1
+            fi
+            ;;
+        ip_address)
+            # IPv4 address validation
+            if [[ ! "$input" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+                log_error "Invalid IP address: $input"
+                return 1
+            fi
+            # Check each octet is 0-255
+            local IFS='.'
+            local -a octets
+            read -ra octets <<<"$input"
+            for octet in "${octets[@]}"; do
+                if [[ "$octet" -gt 255 ]]; then
+                    log_error "Invalid IP address: $input (octet $octet > 255)"
+                    return 1
+                fi
+            done
+            ;;
+        url)
+            # Basic URL validation for redirects
+            if [[ ! "$input" =~ ^https?://[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(/.*)?$ ]]; then
+                log_error "Invalid URL: $input"
+                return 1
+            fi
+            ;;
         *)
             log_error "Unknown validation type: $type"
             return 1
