@@ -139,3 +139,83 @@ teardown() {
     run show_vhost_info "bad;domain"
     assert_failure
 }
+
+# --- Redirect pure functions ---
+
+@test "generate_redirect_config includes ServerName" {
+    run generate_redirect_config "old.com" "https://new.com/" 301
+    assert_success
+    assert_output --partial "ServerName old.com"
+}
+
+@test "generate_redirect_config includes redirect directive" {
+    run generate_redirect_config "old.com" "https://new.com/" 301
+    assert_success
+    assert_output --partial "Redirect 301 / https://new.com/"
+}
+
+@test "generate_redirect_config supports 302 redirect" {
+    run generate_redirect_config "old.com" "https://new.com/" 302
+    assert_success
+    assert_output --partial "Redirect 302"
+}
+
+@test "generate_redirect_config includes VirtualHost block" {
+    run generate_redirect_config "old.com" "https://new.com/" 301
+    assert_success
+    assert_output --partial "<VirtualHost *:80>"
+    assert_output --partial "</VirtualHost>"
+}
+
+@test "generate_www_redirect_snippet generates to_www rules" {
+    run generate_www_redirect_snippet "example.com" "to_www"
+    assert_success
+    assert_output --partial "RewriteEngine On"
+    assert_output --partial "www.example.com"
+    assert_output --partial "R=301"
+}
+
+@test "generate_www_redirect_snippet generates from_www rules" {
+    run generate_www_redirect_snippet "example.com" "from_www"
+    assert_success
+    assert_output --partial "RewriteEngine On"
+    assert_output --partial "example.com"
+    assert_output --partial "R=301"
+}
+
+@test "generate_https_redirect_snippet generates HTTPS rewrite" {
+    run generate_https_redirect_snippet "example.com"
+    assert_success
+    assert_output --partial "RewriteEngine On"
+    assert_output --partial "HTTPS"
+    assert_output --partial "R=301"
+}
+
+# --- Redirect high-level validation ---
+
+@test "create_redirect rejects invalid domain" {
+    run create_redirect "bad;domain" "https://example.com/" 301
+    assert_failure
+}
+
+@test "create_redirect rejects invalid URL" {
+    run create_redirect "example.com" "not-a-url" 301
+    assert_failure
+    assert_output --partial "Invalid URL"
+}
+
+@test "create_redirect rejects invalid redirect code" {
+    run create_redirect "example.com" "https://new.com/" 200
+    assert_failure
+    assert_output --partial "Invalid redirect code"
+}
+
+@test "add_www_redirect rejects invalid domain" {
+    run add_www_redirect "bad;domain"
+    assert_failure
+}
+
+@test "force_https rejects invalid domain" {
+    run force_https "bad;domain"
+    assert_failure
+}

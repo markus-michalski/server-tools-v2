@@ -148,3 +148,49 @@ teardown() {
     assert_success
     assert_output --partial "30 Days"
 }
+
+# --- Wildcard SSL ---
+
+@test "setup_wildcard_ssl rejects invalid domain" {
+    run setup_wildcard_ssl "bad domain" "cloudflare"
+    assert_failure
+    assert_output --partial "Invalid domain"
+}
+
+@test "setup_wildcard_ssl requires DNS provider" {
+    export ST_DNS_PROVIDER=""
+    run setup_wildcard_ssl "example.com" ""
+    assert_failure
+    assert_output --partial "DNS provider not configured"
+}
+
+@test "certbot_dns_plugin_installed returns failure when no provider" {
+    export ST_DNS_PROVIDER=""
+    run certbot_dns_plugin_installed ""
+    assert_failure
+}
+
+@test "get_dns_credentials_path returns configured path" {
+    export ST_DNS_CREDENTIALS_FILE="/root/my-creds.ini"
+    run get_dns_credentials_path "cloudflare"
+    assert_success
+    assert_output "/root/my-creds.ini"
+}
+
+@test "get_dns_credentials_path returns default path when not configured" {
+    export ST_DNS_CREDENTIALS_FILE=""
+    export ST_DNS_PROVIDER=""
+    run get_dns_credentials_path "cloudflare"
+    assert_success
+    assert_output "/root/.certbot-dns-cloudflare.ini"
+}
+
+@test "setup_wildcard_ssl fails when credentials file missing" {
+    mock_command "certbot" 'exit 0'
+    mock_command "dpkg" 'exit 0'
+    export ST_DNS_PROVIDER="cloudflare"
+    export ST_DNS_CREDENTIALS_FILE="${TEST_TMPDIR}/nonexistent.ini"
+    run setup_wildcard_ssl "example.com" "cloudflare"
+    assert_failure
+    assert_output --partial "credentials file not found"
+}

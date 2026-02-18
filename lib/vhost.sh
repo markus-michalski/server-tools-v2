@@ -405,3 +405,173 @@ show_vhost_info() {
         echo "  Status:       disabled"
     fi
 }
+
+# =============================================================================
+# REDIRECT MANAGEMENT
+# =============================================================================
+
+# Generate a redirect vhost config (pure function)
+generate_redirect_config() {
+    local source_domain="$1"
+    local target_url="$2"
+    local code="${3:-301}"
+
+    cat <<REDIRECTEOF
+# Redirect vhost for ${source_domain}
+# Created by server-tools on $(date '+%Y-%m-%d %H:%M:%S')
+<VirtualHost *:80>
+    ServerName ${source_domain}
+    ServerAdmin ${ST_APACHE_SERVER_ADMIN}
+
+    Redirect ${code} / ${target_url}
+
+    ErrorLog /var/log/apache2/${source_domain}-error.log
+</VirtualHost>
+REDIRECTEOF
+}
+
+# Generate www redirect snippet (pure function)
+generate_www_redirect_snippet() {
+    local domain="$1"
+    local direction="${2:-to_www}"
+
+    if [[ "$direction" == "to_www" ]]; then
+        cat <<WWWEOF
+    # Redirect non-www to www
+    RewriteEngine On
+    RewriteCond %{HTTP_HOST} ^${domain}\$ [NC]
+    RewriteRule ^(.*)\$ http://www.${domain}\$1 [R=301,L]
+WWWEOF
+    else
+        cat <<WWWEOF
+    # Redirect www to non-www
+    RewriteEngine On
+    RewriteCond %{HTTP_HOST} ^www\.${domain}\$ [NC]
+    RewriteRule ^(.*)\$ http://${domain}\$1 [R=301,L]
+WWWEOF
+    fi
+}
+
+# Generate HTTPS redirect snippet (pure function)
+generate_https_redirect_snippet() {
+    local domain="$1"
+
+    cat <<HTTPSEOF
+    # Force HTTPS redirect
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^(.*)\$ https://%{HTTP_HOST}\$1 [R=301,L]
+HTTPSEOF
+}
+
+# Create a redirect vhost (high-level operation)
+create_redirect() {
+    local source_domain="$1"
+    local target_url="$2"
+    local code="${3:-301}"
+
+    validate_input "$source_domain" "domain" || return 1
+    validate_input "$target_url" "url" || return 1
+
+    if [[ "$code" != "301" ]] && [[ "$code" != "302" ]]; then
+        log_error "Invalid redirect code: $code (must be 301 or 302)"
+        return 1
+    fi
+
+    local config_file="/etc/apache2/sites-available/${source_domain}.conf"
+    if [[ -f "$config_file" ]]; then
+        log_error "Config already exists: $config_file"
+        return 1
+    fi
+
+    log_info "Creating redirect: $source_domain -> $target_url ($code)"
+
+    local config
+    config=$(generate_redirect_config "$source_domain" "$target_url" "$code")
+
+    echo "$config" >"$config_file"
+    enable_site "$source_domain" || return 1
+    reload_apache || return 1
+
+    audit_log "INFO" "Created redirect: $source_domain -> $target_url ($code)"
+    log_info "Redirect created successfully"
+}
+
+# Add www redirect to existing vhost
+add_www_redirect() {
+    local domain="$1"
+    local direction="${2:-to_www}"
+
+    validate_input "$domain" "domain" || return 1
+
+    local config_file="/etc/apache2/sites-available/${domain}.conf"
+    if [[ ! -f "$config_file" ]]; then
+        log_error "VHost config not found: $config_file"
+        return 1
+    fi
+
+    # Check if rewrite module is enabled
+    if ! apache2ctl -M 2>/dev/null | grep -q "rewrite_module"; then
+        log_info "Enabling rewrite module..."
+        a2enmod rewrite &>/dev/null
+    fi
+
+    # Backup config
+    cp "$config_file" "${config_file}.bak" || return 1
+
+    local snippet
+    snippet=$(generate_www_redirect_snippet "$domain" "$direction")
+
+    # Insert snippet before </VirtualHost>
+    sed -i "/<\/VirtualHost>/i\\${snippet}" "$config_file"
+
+    reload_apache || {
+        log_warn "Apache reload failed, restoring backup..."
+        cp "${config_file}.bak" "$config_file"
+        reload_apache
+        return 1
+    }
+
+    rm -f "${config_file}.bak"
+    audit_log "INFO" "Added www redirect for $domain ($direction)"
+    log_info "WWW redirect added for $domain"
+}
+
+# Force HTTPS redirect on existing vhost
+force_https() {
+    local domain="$1"
+
+    validate_input "$domain" "domain" || return 1
+
+    local config_file="/etc/apache2/sites-available/${domain}.conf"
+    if [[ ! -f "$config_file" ]]; then
+        log_error "VHost config not found: $config_file"
+        return 1
+    fi
+
+    # Check if rewrite module is enabled
+    if ! apache2ctl -M 2>/dev/null | grep -q "rewrite_module"; then
+        log_info "Enabling rewrite module..."
+        a2enmod rewrite &>/dev/null
+    fi
+
+    # Backup config
+    cp "$config_file" "${config_file}.bak" || return 1
+
+    local snippet
+    snippet=$(generate_https_redirect_snippet "$domain")
+
+    # Insert snippet before </VirtualHost>
+    sed -i "/<\/VirtualHost>/i\\${snippet}" "$config_file"
+
+    reload_apache || {
+        log_warn "Apache reload failed, restoring backup..."
+        cp "${config_file}.bak" "$config_file"
+        reload_apache
+        return 1
+    }
+
+    rm -f "${config_file}.bak"
+    audit_log "INFO" "Added HTTPS redirect for $domain"
+    log_info "HTTPS redirect added for $domain"
+}

@@ -321,3 +321,113 @@ recreate_all_ssl() {
     echo ""
     echo "Verify with: sudo certbot renew --dry-run"
 }
+
+# =============================================================================
+# WILDCARD SSL - DNS challenge
+# =============================================================================
+
+# Check if a DNS plugin is installed for certbot
+certbot_dns_plugin_installed() {
+    local provider="${1:-$ST_DNS_PROVIDER}"
+
+    if [[ -z "$provider" ]]; then
+        return 1
+    fi
+
+    command_exists "certbot" && dpkg -l "python3-certbot-dns-${provider}" &>/dev/null 2>&1
+}
+
+# Install certbot DNS plugin
+install_certbot_dns_plugin() {
+    local provider="$1"
+
+    log_info "Installing certbot DNS plugin for $provider..."
+    apt-get update -qq && apt-get install -y -qq "python3-certbot-dns-${provider}" 2>&1
+}
+
+# Get DNS credentials file path
+get_dns_credentials_path() {
+    local provider="${1:-$ST_DNS_PROVIDER}"
+
+    if [[ -n "$ST_DNS_CREDENTIALS_FILE" ]]; then
+        echo "$ST_DNS_CREDENTIALS_FILE"
+    else
+        echo "/root/.certbot-dns-${provider}.ini"
+    fi
+}
+
+# Setup wildcard SSL certificate via DNS challenge
+setup_wildcard_ssl() {
+    local domain="$1"
+    local provider="${2:-$ST_DNS_PROVIDER}"
+
+    validate_input "$domain" "domain" || return 1
+
+    if [[ -z "$provider" ]]; then
+        log_error "DNS provider not configured. Set ST_DNS_PROVIDER in config."
+        echo "Supported providers: cloudflare, digitalocean, route53, google, linode, ovh"
+        return 1
+    fi
+
+    # Ensure certbot is installed
+    if ! certbot_installed; then
+        install_certbot || return 1
+    fi
+
+    # Ensure DNS plugin is installed
+    if ! certbot_dns_plugin_installed "$provider"; then
+        install_certbot_dns_plugin "$provider" || {
+            log_error "Failed to install DNS plugin for $provider"
+            return 1
+        }
+    fi
+
+    # Check DNS credentials file
+    local creds_file
+    creds_file=$(get_dns_credentials_path "$provider")
+    if [[ ! -f "$creds_file" ]]; then
+        log_error "DNS credentials file not found: $creds_file"
+        echo ""
+        echo "Create credentials file with your API key:"
+        case "$provider" in
+            cloudflare)
+                echo "  echo 'dns_cloudflare_api_token = YOUR_TOKEN' >$creds_file"
+                ;;
+            digitalocean)
+                echo "  echo 'dns_digitalocean_token = YOUR_TOKEN' >$creds_file"
+                ;;
+            *)
+                echo "  See certbot-dns-$provider documentation"
+                ;;
+        esac
+        echo "  chmod 600 $creds_file"
+        return 1
+    fi
+
+    # Determine email
+    local email="${ST_CERTBOT_EMAIL:-}"
+    if [[ -z "$email" ]]; then
+        email="webmaster@${domain}"
+    fi
+
+    log_info "Creating wildcard certificate for *.${domain}..."
+
+    certbot certonly \
+        --dns-"$provider" \
+        --dns-"${provider}"-credentials "$creds_file" \
+        -d "${domain}" \
+        -d "*.${domain}" \
+        --email "$email" \
+        --agree-tos \
+        --non-interactive \
+        2>&1 || {
+        log_error "Failed to create wildcard certificate"
+        return 1
+    }
+
+    audit_log "INFO" "Wildcard SSL created: *.${domain} (provider: $provider)"
+    log_info "Wildcard certificate for *.${domain} created successfully"
+    echo ""
+    echo "Certificate covers: ${domain} and *.${domain}"
+    echo "Note: You may need to manually configure Apache to use this certificate."
+}

@@ -266,3 +266,199 @@ teardown() {
     run revoke_privileges "mydb" "myuser"
     assert_success
 }
+
+# --- grant_readonly / grant_readwrite building blocks ---
+
+@test "grant_readonly calls mysql successfully" {
+    mock_command "mysql" 'exit 0'
+    load_mysql_credentials
+    run grant_readonly "mydb" "myuser"
+    assert_success
+}
+
+@test "grant_readwrite calls mysql successfully" {
+    mock_command "mysql" 'exit 0'
+    load_mysql_credentials
+    run grant_readwrite "mydb" "myuser"
+    assert_success
+}
+
+@test "show_user_grants calls mysql with SHOW GRANTS" {
+    mock_command "mysql" 'echo "GRANT USAGE ON *.* TO user@localhost"; exit 0'
+    load_mysql_credentials
+    run show_user_grants "myuser"
+    assert_success
+}
+
+# --- High-level grant operations ---
+
+@test "grant_user_readonly rejects invalid database name" {
+    run grant_user_readonly "bad;db" "user"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+@test "grant_user_readonly rejects invalid username" {
+    run grant_user_readonly "validdb" "bad;user"
+    assert_failure
+    assert_output --partial "Invalid username"
+}
+
+@test "grant_user_readwrite rejects invalid database name" {
+    run grant_user_readwrite "bad;db" "user"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+@test "grant_user_readwrite rejects invalid username" {
+    run grant_user_readwrite "validdb" "bad;user"
+    assert_failure
+    assert_output --partial "Invalid username"
+}
+
+@test "show_grants rejects invalid username" {
+    run show_grants "bad;user"
+    assert_failure
+    assert_output --partial "Invalid username"
+}
+
+# --- Backup operations ---
+
+@test "backup_database rejects invalid database name" {
+    run backup_database "bad;db"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+@test "dump_database creates compressed output file" {
+    export ST_DB_BACKUP_DIR="${TEST_TMPDIR}/db-backups"
+    mock_command "mysqldump" 'echo "CREATE TABLE test"'
+    load_mysql_credentials
+    run dump_database "testdb"
+    assert_success
+    assert_output --partial "db_testdb_"
+    assert_output --partial ".sql.gz"
+}
+
+@test "backup_all_databases handles empty database list" {
+    mock_command "mysql" '
+        for arg in "$@"; do
+            if [[ "$arg" == *"SHOW DATABASES"* ]]; then
+                echo "Database"
+                echo "information_schema"
+                echo "mysql"
+                echo "performance_schema"
+                echo "sys"
+                exit 0
+            fi
+        done
+        exit 0
+    '
+    load_mysql_credentials
+    run backup_all_databases
+    assert_success
+    assert_output --partial "No user databases"
+}
+
+# --- Restore operations ---
+
+@test "restore_database rejects invalid database name" {
+    run restore_database "bad;db" "/tmp/test.sql"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+@test "restore_database requires dump file" {
+    run restore_database "validdb" ""
+    assert_failure
+    assert_output --partial "Dump file path is required"
+}
+
+@test "restore_database fails when file not found" {
+    run restore_database "validdb" "/nonexistent/file.sql"
+    assert_failure
+    assert_output --partial "File not found"
+}
+
+# --- Import operations ---
+
+@test "import_database rejects invalid database name" {
+    run import_database "bad;db" "/tmp/test.sql"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+@test "import_database requires SQL file" {
+    run import_database "validdb" ""
+    assert_failure
+    assert_output --partial "SQL file path is required"
+}
+
+@test "import_database fails when file not found" {
+    run import_database "validdb" "/nonexistent/file.sql"
+    assert_failure
+    assert_output --partial "File not found"
+}
+
+@test "import_database rejects unsupported file format" {
+    touch "${TEST_TMPDIR}/test.csv"
+    run import_database "validdb" "${TEST_TMPDIR}/test.csv"
+    assert_failure
+    assert_output --partial "Unsupported file format"
+}
+
+@test "import_database accepts .sql file extension" {
+    touch "${TEST_TMPDIR}/test.sql"
+    mock_command "mysql" '
+        for arg in "$@"; do
+            if [[ "$arg" == *"USE"* ]]; then
+                exit 0
+            fi
+        done
+        exit 0
+    '
+    load_mysql_credentials
+    run import_database "validdb" "${TEST_TMPDIR}/test.sql"
+    assert_success
+}
+
+@test "import_database accepts .sql.gz file extension" {
+    echo "" | gzip > "${TEST_TMPDIR}/test.sql.gz"
+    mock_command "mysql" '
+        for arg in "$@"; do
+            if [[ "$arg" == *"USE"* ]]; then
+                exit 0
+            fi
+        done
+        exit 0
+    '
+    load_mysql_credentials
+    run import_database "validdb" "${TEST_TMPDIR}/test.sql.gz"
+    assert_success
+}
+
+# --- Export operations ---
+
+@test "export_db_to_file rejects invalid database name" {
+    run export_db_to_file "bad;db"
+    assert_failure
+    assert_output --partial "Invalid database"
+}
+
+# --- restore_dump building block ---
+
+@test "restore_dump rejects unsupported file format" {
+    mock_command "mysql" 'exit 0'
+    load_mysql_credentials
+    run restore_dump "mydb" "/tmp/test.tar.gz"
+    assert_failure
+    assert_output --partial "Unsupported file format"
+}
+
+@test "export_to_file rejects unsupported output format" {
+    mock_command "mysqldump" 'echo "data"'
+    load_mysql_credentials
+    run export_to_file "mydb" "/tmp/test.csv"
+    assert_failure
+    assert_output --partial "Unsupported output format"
+}

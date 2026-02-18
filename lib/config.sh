@@ -36,8 +36,18 @@ ST_DEFAULT_DOCROOT_PATTERN="${ST_DEFAULT_DOCROOT_PATTERN:-/var/www/{domain}/html
 ST_AUTO_BACKUP="${ST_AUTO_BACKUP:-true}"
 ST_BACKUP_RETENTION_DAYS="${ST_BACKUP_RETENTION_DAYS:-30}"
 
+# Database backups
+ST_DB_BACKUP_DIR="${ST_DB_BACKUP_DIR:-/root/db-backups}"
+
 # SSL / Certbot
 ST_CERTBOT_EMAIL="${ST_CERTBOT_EMAIL:-}"
+ST_DNS_PROVIDER="${ST_DNS_PROVIDER:-}"
+ST_DNS_CREDENTIALS_FILE="${ST_DNS_CREDENTIALS_FILE:-}"
+
+# Logs
+ST_APACHE_LOG_DIR="${ST_APACHE_LOG_DIR:-/var/log/apache2}"
+ST_MYSQL_LOG_FILE="${ST_MYSQL_LOG_FILE:-/var/log/mysql/error.log}"
+ST_LOG_LINES="${ST_LOG_LINES:-50}"
 
 # Security
 ST_ALLOWED_DOCROOT_PATHS="${ST_ALLOWED_DOCROOT_PATHS:-/var/www:/srv/www}"
@@ -98,6 +108,7 @@ show_config() {
     echo "  Credentials:   $ST_CREDENTIAL_DIR"
     echo "  Audit log:     $ST_AUDIT_LOG"
     echo "  Backups:       $ST_BACKUP_DIR"
+    echo "  DB backups:    $ST_DB_BACKUP_DIR"
     echo "  Config file:   $ST_CONFIG_FILE"
     echo ""
     echo "Defaults:"

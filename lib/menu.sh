@@ -15,6 +15,10 @@ source "${BASH_SOURCE%/*}/database.sh"
 source "${BASH_SOURCE%/*}/vhost.sh"
 source "${BASH_SOURCE%/*}/ssl.sh"
 source "${BASH_SOURCE%/*}/cron.sh"
+source "${BASH_SOURCE%/*}/status.sh"
+source "${BASH_SOURCE%/*}/log.sh"
+source "${BASH_SOURCE%/*}/firewall.sh"
+source "${BASH_SOURCE%/*}/fail2ban.sh"
 
 # =============================================================================
 # MENU HELPERS
@@ -66,6 +70,14 @@ database_menu() {
             "Delete database & user" \
             "Assign database to additional user" \
             "Reassign database to different user" \
+            "Grant read-only access" \
+            "Grant read-write access" \
+            "Show user grants" \
+            "Backup database" \
+            "Backup all databases" \
+            "Restore database from backup" \
+            "Import SQL file" \
+            "Export database to file" \
             "List databases" \
             "Show database info" \
             "Back to main menu"
@@ -121,15 +133,59 @@ database_menu() {
                 press_enter
                 ;;
             7)
-                list_databases || true
+                read -r -p "Database name: " db_name
+                read -r -p "User: " db_user
+                grant_user_readonly "$db_name" "$db_user" || true
                 press_enter
                 ;;
             8)
                 read -r -p "Database name: " db_name
-                show_db_info "$db_name" || true
+                read -r -p "User: " db_user
+                grant_user_readwrite "$db_name" "$db_user" || true
                 press_enter
                 ;;
             9)
+                read -r -p "Username: " db_user
+                show_grants "$db_user" || true
+                press_enter
+                ;;
+            10)
+                read -r -p "Database name: " db_name
+                backup_database "$db_name" || true
+                press_enter
+                ;;
+            11)
+                backup_all_databases || true
+                press_enter
+                ;;
+            12)
+                read -r -p "Database name: " db_name
+                read -r -p "Dump file path: " dump_file
+                restore_database "$db_name" "$dump_file" || true
+                press_enter
+                ;;
+            13)
+                read -r -p "Database name: " db_name
+                read -r -p "SQL file path: " sql_file
+                import_database "$db_name" "$sql_file" || true
+                press_enter
+                ;;
+            14)
+                read -r -p "Database name: " db_name
+                read -r -p "Output file (empty for default): " output_file
+                export_db_to_file "$db_name" "$output_file" || true
+                press_enter
+                ;;
+            15)
+                list_databases || true
+                press_enter
+                ;;
+            16)
+                read -r -p "Database name: " db_name
+                show_db_info "$db_name" || true
+                press_enter
+                ;;
+            17)
                 submenu=false
                 ;;
             *)
@@ -154,6 +210,9 @@ vhost_menu() {
             "List virtual hosts" \
             "Change PHP version" \
             "Show vhost info" \
+            "Create domain redirect (301/302)" \
+            "Add www redirect" \
+            "Force HTTPS redirect" \
             "Back to main menu"
 
         case $MENU_CHOICE in
@@ -207,6 +266,28 @@ vhost_menu() {
                 press_enter
                 ;;
             6)
+                read -r -p "Source domain: " source_domain
+                read -r -p "Target URL (e.g. https://new-domain.com/): " target_url
+                read -r -p "Redirect code [301]: " code
+                create_redirect "$source_domain" "$target_url" "${code:-301}" || true
+                press_enter
+                ;;
+            7)
+                read -r -p "Domain: " domain
+                echo "  1. Redirect non-www to www"
+                echo "  2. Redirect www to non-www"
+                read -r -p "Direction [1]: " direction
+                local dir="to_www"
+                [[ "$direction" == "2" ]] && dir="from_www"
+                add_www_redirect "$domain" "$dir" || true
+                press_enter
+                ;;
+            8)
+                read -r -p "Domain: " domain
+                force_https "$domain" || true
+                press_enter
+                ;;
+            9)
                 submenu=false
                 ;;
             *)
@@ -227,6 +308,7 @@ ssl_menu() {
     while $submenu; do
         show_menu "SSL Certificate Management" \
             "Create SSL certificate" \
+            "Create wildcard certificate (DNS challenge)" \
             "Delete SSL certificate" \
             "List certificates" \
             "Check expiring certificates" \
@@ -244,30 +326,36 @@ ssl_menu() {
                 press_enter
                 ;;
             2)
+                read -r -p "Domain (e.g. example.com for *.example.com): " domain
+                read -r -p "DNS provider (cloudflare/digitalocean/route53): " provider
+                setup_wildcard_ssl "$domain" "$provider" || true
+                press_enter
+                ;;
+            3)
                 list_certificates || true
                 echo ""
                 read -r -p "Domain: " domain
                 delete_ssl "$domain" || true
                 press_enter
                 ;;
-            3)
+            4)
                 list_certificates || true
                 press_enter
                 ;;
-            4)
+            5)
                 read -r -p "Days threshold [30]: " days
                 check_expiring_soon "${days:-30}" || true
                 press_enter
                 ;;
-            5)
+            6)
                 setup_ssl_renewal || true
                 press_enter
                 ;;
-            6)
+            7)
                 recreate_all_ssl || true
                 press_enter
                 ;;
-            7)
+            8)
                 submenu=false
                 ;;
             *)
@@ -323,51 +411,153 @@ cron_menu() {
 }
 
 # =============================================================================
-# SYSTEM INFO
+# FIREWALL MENU
 # =============================================================================
 
-system_info() {
-    clear
-    print_header "System Information"
+firewall_menu() {
+    local submenu=true
 
-    echo "System:"
-    echo "  Hostname:  $(hostname 2>/dev/null || echo 'unknown')"
-    echo "  Apache:    $(apache2 -v 2>/dev/null | head -1 | cut -d' ' -f3 || echo 'not installed')"
-    echo "  MySQL:     $(mysql --version 2>/dev/null | cut -d' ' -f6 | cut -d',' -f1 || echo 'not installed')"
-    echo ""
+    while $submenu; do
+        show_menu "Firewall Management (UFW)" \
+            "Show firewall status" \
+            "Allow port" \
+            "Deny port" \
+            "Remove rule" \
+            "Enable/Disable firewall" \
+            "Back to main menu"
 
-    echo "Configuration:"
-    show_config
-    echo ""
+        case $MENU_CHOICE in
+            1)
+                show_firewall_status || true
+                press_enter
+                ;;
+            2)
+                read -r -p "Port number: " port
+                read -r -p "Protocol (tcp/udp, empty for both): " proto
+                allow_port "$port" "$proto" || true
+                press_enter
+                ;;
+            3)
+                read -r -p "Port number: " port
+                read -r -p "Protocol (tcp/udp, empty for both): " proto
+                deny_port "$port" "$proto" || true
+                press_enter
+                ;;
+            4)
+                remove_rule || true
+                press_enter
+                ;;
+            5)
+                toggle_firewall || true
+                press_enter
+                ;;
+            6)
+                submenu=false
+                ;;
+            *)
+                log_error "Invalid option"
+                press_enter
+                ;;
+        esac
+    done
+}
 
-    echo "Backups:"
-    list_backups
-    echo ""
+# =============================================================================
+# FAIL2BAN MENU
+# =============================================================================
 
-    echo "PHP Versions:"
-    local available_php
-    available_php=$(detect_php_versions)
-    if [[ -n "$available_php" ]]; then
-        for version in $available_php; do
-            echo "  PHP $version: $("php${version}" -v 2>/dev/null | head -1 || echo 'version info unavailable')"
-        done
-    else
-        echo "  No PHP-FPM versions found"
-    fi
-    echo ""
+fail2ban_menu() {
+    local submenu=true
 
-    echo "Active Virtual Hosts:"
-    if [[ -d "/etc/apache2/sites-enabled" ]]; then
-        local vhost_found=0
-        for f in /etc/apache2/sites-enabled/*.conf; do
-            [[ -f "$f" ]] || continue
-            echo "  - $(basename "$f" .conf)"
-            vhost_found=1
-        done
-        [[ $vhost_found -eq 0 ]] && echo "  (none)"
-    else
-        echo "  Apache not installed"
-    fi
+    while $submenu; do
+        show_menu "Fail2Ban Management" \
+            "Show Fail2Ban status" \
+            "Show banned IPs" \
+            "Unban IP address" \
+            "Back to main menu"
+
+        case $MENU_CHOICE in
+            1)
+                show_fail2ban_status || true
+                press_enter
+                ;;
+            2)
+                show_banned || true
+                press_enter
+                ;;
+            3)
+                show_banned || true
+                echo ""
+                read -r -p "IP address to unban: " ip
+                unban_ip "$ip" || true
+                press_enter
+                ;;
+            4)
+                submenu=false
+                ;;
+            *)
+                log_error "Invalid option"
+                press_enter
+                ;;
+        esac
+    done
+}
+
+# =============================================================================
+# LOG VIEWER MENU
+# =============================================================================
+
+log_menu() {
+    local submenu=true
+
+    while $submenu; do
+        show_menu "Log Viewer" \
+            "Show Apache errors" \
+            "Show Apache access log" \
+            "Show MySQL errors" \
+            "Show audit log" \
+            "Search in logs" \
+            "Back to main menu"
+
+        case $MENU_CHOICE in
+            1)
+                read -r -p "Domain (empty for global): " domain
+                read -r -p "Lines to show [$ST_LOG_LINES]: " lines
+                show_apache_errors "$domain" "${lines:-$ST_LOG_LINES}" || true
+                press_enter
+                ;;
+            2)
+                read -r -p "Domain (empty for global): " domain
+                read -r -p "Lines to show [$ST_LOG_LINES]: " lines
+                show_apache_access "$domain" "${lines:-$ST_LOG_LINES}" || true
+                press_enter
+                ;;
+            3)
+                read -r -p "Lines to show [$ST_LOG_LINES]: " lines
+                show_mysql_errors "${lines:-$ST_LOG_LINES}" || true
+                press_enter
+                ;;
+            4)
+                read -r -p "Filter (empty for all): " filter
+                read -r -p "Lines to show [$ST_LOG_LINES]: " lines
+                show_audit_log_entries "${lines:-$ST_LOG_LINES}" "$filter" || true
+                press_enter
+                ;;
+            5)
+                read -r -p "Search pattern: " pattern
+                read -r -p "Max results [$ST_LOG_LINES]: " lines
+                search_logs "$pattern" "${lines:-$ST_LOG_LINES}" || true
+                press_enter
+                ;;
+            6)
+                submenu=false
+                ;;
+            *)
+                log_error "Invalid option"
+                press_enter
+                ;;
+        esac
+    done
 }
 
 # =============================================================================
@@ -383,7 +573,10 @@ main_menu() {
             "Virtual Host Management" \
             "SSL Certificate Management" \
             "Cron Job Management" \
-            "System Information" \
+            "Firewall Management" \
+            "Fail2Ban" \
+            "Log Viewer" \
+            "System Status" \
             "Exit"
 
         case $MENU_CHOICE in
@@ -391,11 +584,14 @@ main_menu() {
             2) vhost_menu ;;
             3) ssl_menu ;;
             4) cron_menu ;;
-            5)
-                system_info
+            5) firewall_menu ;;
+            6) fail2ban_menu ;;
+            7) log_menu ;;
+            8)
+                show_full_status
                 press_enter
                 ;;
-            6)
+            9)
                 echo "Goodbye!"
                 running=false
                 ;;
