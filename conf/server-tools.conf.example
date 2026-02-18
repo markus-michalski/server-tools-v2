@@ -1,0 +1,60 @@
+# =============================================================================
+# Server Tools Configuration
+# =============================================================================
+# Copy this file to /etc/server-tools/config and adjust values.
+# All settings have sensible defaults - only uncomment what you need to change.
+# =============================================================================
+
+# --- Paths ---
+
+# Directory for database credential files
+#ST_CREDENTIAL_DIR="/root/db-credentials"
+
+# Audit log file location
+#ST_AUDIT_LOG="/var/log/server-tools-audit.log"
+
+# Backup directory for pre-deletion backups
+#ST_BACKUP_DIR="/root/server-tools-backups"
+
+# --- PHP & Apache ---
+
+# Default PHP version for new virtual hosts
+#ST_DEFAULT_PHP_VERSION="8.3"
+
+# PHP versions to scan for FPM sockets
+#ST_PHP_VERSIONS_TO_SCAN="7.4 8.0 8.1 8.2 8.3 8.4"
+
+# Apache ServerAdmin email
+#ST_APACHE_SERVER_ADMIN="webmaster@localhost"
+
+# Allowed base paths for DocumentRoot (colon-separated)
+#ST_ALLOWED_DOCROOT_PATHS="/var/www:/srv/www"
+
+# --- SSL ---
+
+# Default email for Let's Encrypt certificates
+#ST_CERTBOT_EMAIL="admin@example.com"
+
+# --- Passwords ---
+
+# Default generated password length
+#ST_PASSWORD_LENGTH=25
+
+# Minimum accepted password length
+#ST_PASSWORD_MIN_LENGTH=12
+
+# --- Features ---
+
+# Automatically backup configs before deletion
+#ST_AUTO_BACKUP=true
+
+# Backup retention in days (cleanup removes older backups)
+#ST_BACKUP_RETENTION_DAYS=30
+
+# Enable audit logging
+#ST_AUDIT_LOGGING=true
+
+# --- Credential Files ---
+
+# File permissions for credential files (octal)
+#ST_CREDENTIAL_FILE_PERMISSIONS=600
