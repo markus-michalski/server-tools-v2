@@ -1,0 +1,8 @@
+# ShellCheck configuration for server-tools
+
+# Allow sourcing from lib/ directory
+external-sources=true
+source-path=lib
+
+# Target shell
+shell=bash
