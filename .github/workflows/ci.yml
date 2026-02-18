@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: ShellCheck & Format
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Install shfmt
+        run: |
+          curl -sS https://webinstall.dev/shfmt | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run ShellCheck
+        run: shellcheck -x bin/server-tools lib/*.sh
+
+      - name: Check formatting
+        run: shfmt -i 4 -bn -ci -d bin/server-tools lib/*.sh
+
+  test:
+    runs-on: ubuntu-latest
+    name: BATS Tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install BATS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Setup test dependencies
+        run: make setup-tests
+
+      - name: Run tests
+        run: bats tests/unit/*.bats

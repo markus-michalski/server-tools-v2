@@ -1,0 +1,61 @@
+#!/bin/bash
+# server-tools - Server administration toolkit
+# https://github.com/markusmichalski/server-tools-v2
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="${SCRIPT_DIR}/../lib"
+
+# Source libraries
+for lib in core config security backup; do
+    # shellcheck source=/dev/null
+    source "${LIB_DIR}/${lib}.sh"
+done
+
+# CLI entry point
+case "${1:-}" in
+    --version | -v)
+        echo "server-tools ${ST_VERSION}"
+        ;;
+    --config | -c)
+        load_config
+        show_config
+        ;;
+    --help | -h)
+        cat <<'EOF'
+server-tools - Server Administration Toolkit
+
+USAGE:
+  server-tools [OPTION]
+
+OPTIONS:
+  (none)          Start interactive menu
+  install         Install system-wide
+  --version, -v   Show version
+  --config, -c    Show current configuration
+  --help, -h      Show this help
+
+FEATURES:
+  Database Management    MySQL/MariaDB databases & users
+  Virtual Host Mgmt      Apache vHosts with PHP-FPM
+  SSL Management         Let's Encrypt certificates
+  Cron Management        System-wide cron jobs
+
+CONFIGURATION:
+  Config file:   /etc/server-tools/config
+  Credentials:   /root/db-credentials/
+  Audit log:     /var/log/server-tools-audit.log
+
+EOF
+        ;;
+    "")
+        check_root
+        load_config
+        check_dependencies
+        echo "Interactive menu not yet implemented"
+        ;;
+    *)
+        die "Unknown option: $1. Use --help for usage."
+        ;;
+esac
