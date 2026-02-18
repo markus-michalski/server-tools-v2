@@ -16,6 +16,9 @@
 # Backup directory for pre-deletion backups
 #ST_BACKUP_DIR="/root/server-tools-backups"
 
+# Database backup directory (for dump/export operations)
+#ST_DB_BACKUP_DIR="/root/db-backups"
+
 # --- PHP & Apache ---
 
 # Default PHP version for new virtual hosts
@@ -35,6 +38,23 @@
 # Default email for Let's Encrypt certificates
 #ST_CERTBOT_EMAIL="admin@example.com"
 
+# DNS provider for wildcard SSL (cloudflare, digitalocean, route53, google, linode, ovh)
+#ST_DNS_PROVIDER=""
+
+# Path to DNS API credentials file (auto-detected if empty)
+#ST_DNS_CREDENTIALS_FILE=""
+
+# --- MySQL ---
+
+# MySQL config file with root credentials
+#ST_MYSQL_CONFIG_FILE="/root/.my.cnf"
+
+# Default character set for new databases
+#ST_DEFAULT_CHARSET="utf8mb4"
+
+# Default collation for new databases
+#ST_DEFAULT_COLLATION="utf8mb4_unicode_ci"
+
 # --- Passwords ---
 
 # Default generated password length
@@ -53,6 +73,17 @@
 
 # Enable audit logging
 #ST_AUDIT_LOGGING=true
+
+# --- Logs ---
+
+# Apache log directory
+#ST_APACHE_LOG_DIR="/var/log/apache2"
+
+# MySQL error log file
+#ST_MYSQL_LOG_FILE="/var/log/mysql/error.log"
+
+# Default number of log lines to display
+#ST_LOG_LINES=50
 
 # --- Credential Files ---
 

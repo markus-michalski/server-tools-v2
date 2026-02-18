@@ -92,11 +92,17 @@ check_dependencies() {
 # --- User interaction ---
 
 # Ask for confirmation, returns 0 for yes, 1 for no
+# Skips prompt when ST_AUTO_CONFIRM is set (for CLI --yes flag)
 # Usage: confirm "Delete database?" || return 1
 confirm() {
     local prompt="${1:-Continue?}"
-    local response
 
+    # Auto-confirm for non-interactive CLI usage
+    if [[ "${ST_AUTO_CONFIRM:-}" == "true" ]]; then
+        return 0
+    fi
+
+    local response
     read -r -p "${_BOLD}${prompt} (y/N):${_RESET} " response
     [[ "$response" =~ ^[yYjJ]$ ]]
 }

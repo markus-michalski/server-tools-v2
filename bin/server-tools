@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/../lib"
 
 # Source all libraries
-for lib in core config security backup database vhost ssl cron menu; do
+for lib in core config security backup database vhost ssl cron status log firewall fail2ban cli menu; do
     # shellcheck source=/dev/null
     source "${LIB_DIR}/${lib}.sh"
 done
@@ -130,20 +130,41 @@ show_help() {
 server-tools v${ST_VERSION} - Server Administration Toolkit
 
 USAGE:
-  server-tools [OPTION]
+  server-tools [OPTIONS]
+  server-tools <command> <action> [flags]
+
+INTERACTIVE MODE:
+  server-tools              Start interactive menu
+
+COMMANDS:
+  db, database              Database management
+  vhost                     Virtual host management
+  ssl                       SSL certificate management
+  cron                      Cron job management
+  firewall, fw              UFW firewall management
+  fail2ban, f2b             Fail2Ban management
+  logs, log                 Log viewer
+  status                    System status overview
 
 OPTIONS:
-  (none)          Start interactive menu
-  install         Install system-wide
-  --version, -v   Show version
-  --config, -c    Show current configuration
-  --help, -h      Show this help
+  install                   Install system-wide
+  --version, -v             Show version
+  --config, -c              Show current configuration
+  --help, -h                Show this help
 
-FEATURES:
-  Database Management    MySQL/MariaDB databases & users
-  Virtual Host Mgmt      Apache vHosts with PHP-FPM
-  SSL Management         Let's Encrypt certificates
-  Cron Management        System-wide cron jobs
+GLOBAL FLAGS:
+  --yes, -y                 Auto-confirm prompts
+  --quiet, -q               Reduce output
+
+EXAMPLES:
+  server-tools db create --name mydb --user myuser
+  server-tools db backup --name mydb
+  server-tools vhost create --domain example.com --php 8.3
+  server-tools ssl create --domain example.com
+  server-tools firewall allow --port 8080 --proto tcp
+  server-tools fail2ban status
+  server-tools logs apache --domain example.com --lines 100
+  server-tools status
 
 CONFIGURATION:
   Config file:   /etc/server-tools/config
@@ -156,6 +177,26 @@ DOCUMENTATION:
 
 EOF
 }
+
+# Parse global flags first
+args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --yes | -y)
+            export ST_AUTO_CONFIRM="true"
+            shift
+            ;;
+        --quiet | -q)
+            export ST_QUIET="true"
+            shift
+            ;;
+        *)
+            args+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${args[@]+"${args[@]}"}"
 
 case "${1:-}" in
     install)
@@ -173,6 +214,54 @@ case "${1:-}" in
     --help | -h)
         show_help
         ;;
+    db | database)
+        check_root
+        load_config
+        shift
+        cli_database "$@"
+        ;;
+    vhost)
+        check_root
+        load_config
+        shift
+        cli_vhost "$@"
+        ;;
+    ssl)
+        check_root
+        load_config
+        shift
+        cli_ssl "$@"
+        ;;
+    cron)
+        check_root
+        load_config
+        shift
+        cli_cron "$@"
+        ;;
+    firewall | fw)
+        check_root
+        load_config
+        shift
+        cli_firewall "$@"
+        ;;
+    fail2ban | f2b)
+        check_root
+        load_config
+        shift
+        cli_fail2ban "$@"
+        ;;
+    logs | log)
+        check_root
+        load_config
+        shift
+        cli_logs "$@"
+        ;;
+    status)
+        check_root
+        load_config
+        shift
+        cli_status "$@"
+        ;;
     "")
         check_root
         load_config
@@ -180,6 +269,6 @@ case "${1:-}" in
         main_menu
         ;;
     *)
-        die "Unknown option: $1. Use --help for usage."
+        die "Unknown command: $1. Use --help for usage."
         ;;
 esac
