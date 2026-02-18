@@ -264,6 +264,96 @@ create_db_for_user() {
     log_info "Database '$db_name' granted to user '$username'"
 }
 
+# Delete a database but keep the user account
+delete_database_keep_user() {
+    local db_name="$1"
+    local username="${2:-}"
+
+    validate_input "$db_name" "database" || return 1
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    echo "WARNING: This will permanently delete database '$db_name'"
+    if [[ -n "$username" ]]; then
+        echo "User '$username' will NOT be deleted (only privileges revoked)"
+    fi
+
+    # Backup credentials before deletion
+    backup_before_delete "${ST_CREDENTIAL_DIR}/${db_name}.txt" "db_${db_name}" || return 1
+
+    confirm "Delete database '$db_name'?" || {
+        echo "Aborted."
+        return 1
+    }
+
+    log_info "Deleting database '$db_name'..."
+
+    # Revoke privileges before dropping the database
+    if [[ -n "$username" ]]; then
+        validate_input "$username" "username" || return 1
+        if user_exists "$username"; then
+            revoke_privileges "$db_name" "$username" || log_warn "Failed to revoke privileges for '$username'"
+        fi
+    fi
+
+    drop_db_only "$db_name" || return 1
+    remove_credentials "$db_name"
+
+    audit_log "INFO" "Deleted database: $db_name (user kept: ${username:-none})"
+    log_info "Database '$db_name' deleted successfully (user kept)"
+}
+
+# Reassign a database from one user to another
+reassign_db_to_user() {
+    local db_name="$1"
+    local old_user="$2"
+    local new_user="$3"
+
+    validate_input "$db_name" "database" || return 1
+    validate_input "$old_user" "username" || return 1
+    validate_input "$new_user" "username" || return 1
+
+    load_mysql_credentials || return 1
+
+    if ! db_exists "$db_name"; then
+        log_error "Database '$db_name' does not exist"
+        return 1
+    fi
+
+    if ! user_exists "$old_user"; then
+        log_error "Current user '$old_user' does not exist"
+        return 1
+    fi
+
+    if ! user_exists "$new_user"; then
+        log_error "New user '$new_user' does not exist"
+        return 1
+    fi
+
+    if [[ "$old_user" == "$new_user" ]]; then
+        log_error "Old and new user are the same"
+        return 1
+    fi
+
+    log_info "Reassigning '$db_name' from '$old_user' to '$new_user'..."
+
+    revoke_privileges "$db_name" "$old_user" || return 1
+    grant_privileges "$db_name" "$new_user" || {
+        # Rollback: re-grant to old user
+        log_warn "Failed to grant to '$new_user', restoring '$old_user' access..."
+        grant_privileges "$db_name" "$old_user" || log_error "CRITICAL: Rollback failed! Manual intervention required."
+        return 1
+    }
+
+    audit_log "INFO" "Reassigned $db_name from $old_user to $new_user"
+    log_info "Database '$db_name' reassigned from '$old_user' to '$new_user'"
+}
+
 # Grant access on an existing database to an existing user
 assign_db_to_user() {
     local db_name="$1"

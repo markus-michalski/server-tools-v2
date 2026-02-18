@@ -205,3 +205,64 @@ teardown() {
     run delete_database "bad;db"
     assert_failure
 }
+
+# --- delete_database_keep_user validation ---
+
+@test "delete_database_keep_user rejects invalid database name" {
+    run delete_database_keep_user "bad;db"
+    assert_failure
+    assert_output --partial "Invalid database name"
+}
+
+@test "delete_database_keep_user rejects invalid username" {
+    mock_command "mysql" 'exit 0'
+    load_mysql_credentials
+    run delete_database_keep_user "validdb" "bad;user"
+    assert_failure
+}
+
+# --- reassign_db_to_user validation ---
+
+@test "reassign_db_to_user rejects invalid database name" {
+    run reassign_db_to_user "bad;db" "user1" "user2"
+    assert_failure
+    assert_output --partial "Invalid database name"
+}
+
+@test "reassign_db_to_user rejects invalid old username" {
+    run reassign_db_to_user "validdb" "bad;user" "user2"
+    assert_failure
+    assert_output --partial "Invalid username"
+}
+
+@test "reassign_db_to_user rejects invalid new username" {
+    run reassign_db_to_user "validdb" "user1" "bad;user"
+    assert_failure
+    assert_output --partial "Invalid username"
+}
+
+@test "reassign_db_to_user rejects same old and new user" {
+    mock_command "mysql" '
+        for arg in "$@"; do
+            if [[ "$arg" == *"USE"* ]]; then
+                exit 0
+            fi
+            if [[ "$arg" == *"COUNT"* ]]; then
+                echo -e "COUNT(*)\n1"
+                exit 0
+            fi
+        done
+        exit 0
+    '
+    load_mysql_credentials
+    run reassign_db_to_user "validdb" "sameuser" "sameuser"
+    assert_failure
+    assert_output --partial "same"
+}
+
+@test "revoke_privileges calls mysql with REVOKE" {
+    mock_command "mysql" 'exit 0'
+    load_mysql_credentials
+    run revoke_privileges "mydb" "myuser"
+    assert_success
+}

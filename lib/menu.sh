@@ -62,8 +62,10 @@ database_menu() {
         show_menu "Database Management" \
             "Create database & user" \
             "Create database for existing user" \
-            "Assign database to existing user" \
+            "Delete database only (keep user)" \
             "Delete database & user" \
+            "Assign database to additional user" \
+            "Reassign database to different user" \
             "List databases" \
             "Show database info" \
             "Back to main menu"
@@ -88,33 +90,46 @@ database_menu() {
                 press_enter
                 ;;
             3)
-                read -r -p "Database name: " db_name
-                read -r -p "User to grant access: " db_user
-                assign_db_to_user "$db_name" "$db_user" || true
+                list_databases || true
+                echo ""
+                read -r -p "Database to delete: " db_name
+                read -r -p "User to revoke access from (empty to skip): " db_user
+                delete_database_keep_user "$db_name" "$db_user" || true
                 press_enter
                 ;;
             4)
                 list_databases || true
                 echo ""
                 read -r -p "Database to delete: " db_name
-                read -r -p "User to delete (empty to keep): " db_user
-                local drop_user="false"
-                if [[ -n "$db_user" ]]; then
-                    drop_user="true"
-                fi
-                delete_database "$db_name" "$db_user" "$drop_user" || true
+                read -r -p "User to delete: " db_user
+                delete_database "$db_name" "$db_user" "true" || true
                 press_enter
                 ;;
             5)
-                list_databases || true
+                read -r -p "Database name: " db_name
+                read -r -p "User to grant access: " db_user
+                assign_db_to_user "$db_name" "$db_user" || true
                 press_enter
                 ;;
             6)
+                list_databases || true
+                echo ""
+                read -r -p "Database name: " db_name
+                read -r -p "Current user: " old_user
+                read -r -p "New user: " new_user
+                reassign_db_to_user "$db_name" "$old_user" "$new_user" || true
+                press_enter
+                ;;
+            7)
+                list_databases || true
+                press_enter
+                ;;
+            8)
                 read -r -p "Database name: " db_name
                 show_db_info "$db_name" || true
                 press_enter
                 ;;
-            7)
+            9)
                 submenu=false
                 ;;
             *)
