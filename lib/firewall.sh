@@ -23,7 +23,7 @@ ufw_installed() {
 
 # Check if ufw is enabled
 ufw_is_enabled() {
-    ufw status 2>/dev/null | head -1 | grep -q "active"
+    ufw status 2>/dev/null | head -1 | grep -q "Status: active"
 }
 
 # Get ufw status output
