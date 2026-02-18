@@ -219,7 +219,7 @@ create_vhost() {
 
     # Create welcome page
     if [[ "$no_welcome" != "true" ]]; then
-        generate_welcome_page "$domain" > "${docroot}/index.php"
+        generate_welcome_page "$domain" >"${docroot}/index.php"
         chown www-data:www-data "${docroot}/index.php"
         chmod 644 "${docroot}/index.php"
     fi
