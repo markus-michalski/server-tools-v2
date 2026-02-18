@@ -1,30 +1,133 @@
 #!/bin/bash
 # server-tools - Server administration toolkit
 # https://github.com/markusmichalski/server-tools-v2
+#
+# Manages MySQL databases, Apache virtual hosts, Let's Encrypt SSL
+# certificates, and system cron jobs on Debian/Ubuntu servers.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="${SCRIPT_DIR}/../lib"
 
-# Source libraries
-for lib in core config security backup; do
+# Source all libraries
+for lib in core config security backup database vhost ssl cron menu; do
     # shellcheck source=/dev/null
     source "${LIB_DIR}/${lib}.sh"
 done
 
-# CLI entry point
-case "${1:-}" in
-    --version | -v)
-        echo "server-tools ${ST_VERSION}"
-        ;;
-    --config | -c)
-        load_config
-        show_config
-        ;;
-    --help | -h)
-        cat <<'EOF'
-server-tools - Server Administration Toolkit
+# =============================================================================
+# INSTALLATION
+# =============================================================================
+
+install_tools() {
+    local install_dir="/usr/local/lib/server-tools"
+    local bin_dir="/usr/local/bin"
+    local config_dir
+    config_dir=$(dirname "$ST_CONFIG_FILE")
+
+    print_header "Server Tools Installation"
+
+    # Create config directory
+    if [[ ! -d "$config_dir" ]]; then
+        mkdir -p "$config_dir"
+        chmod 755 "$config_dir"
+        echo "  Config directory created: $config_dir"
+    fi
+
+    # Create default config if missing
+    if [[ ! -f "$ST_CONFIG_FILE" ]]; then
+        local example_conf="${SCRIPT_DIR}/../conf/server-tools.conf.example"
+        if [[ -f "$example_conf" ]]; then
+            cp "$example_conf" "$ST_CONFIG_FILE"
+        else
+            cat > "$ST_CONFIG_FILE" <<'CONFIGEOF'
+# Server Tools Configuration
+# Uncomment and modify values as needed
+
+# Paths
+#ST_CREDENTIAL_DIR="/root/db-credentials"
+#ST_AUDIT_LOG="/var/log/server-tools-audit.log"
+#ST_BACKUP_DIR="/root/server-tools-backups"
+
+# Defaults
+#ST_DEFAULT_PHP_VERSION="8.3"
+#ST_CERTBOT_EMAIL="admin@example.com"
+
+# Passwords
+#ST_PASSWORD_LENGTH=25
+#ST_PASSWORD_MIN_LENGTH=12
+
+# Features
+#ST_AUTO_BACKUP=true
+#ST_AUDIT_LOGGING=true
+CONFIGEOF
+        fi
+        chmod 600 "$ST_CONFIG_FILE"
+        echo "  Config created: $ST_CONFIG_FILE"
+    fi
+
+    # Create credential directory
+    if [[ ! -d "$ST_CREDENTIAL_DIR" ]]; then
+        local old_umask
+        old_umask=$(umask)
+        umask 077
+        mkdir -p "$ST_CREDENTIAL_DIR"
+        umask "$old_umask"
+        echo "  Credential directory created: $ST_CREDENTIAL_DIR"
+    fi
+
+    # Create backup directory
+    if [[ ! -d "$ST_BACKUP_DIR" ]]; then
+        mkdir -p "$ST_BACKUP_DIR"
+        chmod 700 "$ST_BACKUP_DIR"
+        echo "  Backup directory created: $ST_BACKUP_DIR"
+    fi
+
+    # Create audit log directory
+    local log_dir
+    log_dir=$(dirname "$ST_AUDIT_LOG")
+    if [[ ! -d "$log_dir" ]]; then
+        mkdir -p "$log_dir"
+        chmod 755 "$log_dir"
+    fi
+
+    # Install libraries
+    mkdir -p "$install_dir"
+    cp "${LIB_DIR}"/*.sh "$install_dir/"
+    chmod 644 "$install_dir"/*.sh
+    echo "  Libraries installed: $install_dir"
+
+    # Install main script
+    install -m 700 -o root -g root "${SCRIPT_DIR}/server-tools" "${bin_dir}/server-tools"
+    echo "  Binary installed: ${bin_dir}/server-tools"
+
+    # Update LIB_DIR in installed script to point to installed location
+    sed -i "s|LIB_DIR=.*|LIB_DIR=\"${install_dir}\"|" "${bin_dir}/server-tools"
+
+    # Create shortcuts
+    for shortcut in st servertools; do
+        ln -sf "${bin_dir}/server-tools" "${bin_dir}/${shortcut}"
+        echo "  Shortcut created: $shortcut"
+    done
+
+    echo ""
+    audit_log "INFO" "Server tools installed to $install_dir"
+    log_info "Installation complete!"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Edit config: $ST_CONFIG_FILE"
+    echo "  2. Run: server-tools (or st)"
+    echo "  3. Show config: server-tools --config"
+}
+
+# =============================================================================
+# CLI ENTRY POINT
+# =============================================================================
+
+show_help() {
+    cat <<EOF
+server-tools v${ST_VERSION} - Server Administration Toolkit
 
 USAGE:
   server-tools [OPTION]
@@ -46,14 +149,35 @@ CONFIGURATION:
   Config file:   /etc/server-tools/config
   Credentials:   /root/db-credentials/
   Audit log:     /var/log/server-tools-audit.log
+  Backups:       /root/server-tools-backups/
+
+DOCUMENTATION:
+  https://github.com/markusmichalski/server-tools-v2
 
 EOF
+}
+
+case "${1:-}" in
+    install)
+        check_root
+        load_config
+        install_tools
+        ;;
+    --version | -v)
+        echo "server-tools ${ST_VERSION}"
+        ;;
+    --config | -c)
+        load_config
+        show_config
+        ;;
+    --help | -h)
+        show_help
         ;;
     "")
         check_root
         load_config
         check_dependencies
-        echo "Interactive menu not yet implemented"
+        main_menu
         ;;
     *)
         die "Unknown option: $1. Use --help for usage."
