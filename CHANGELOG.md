@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
 ## [2.0.0] - 2026-02-18
 
 ### Added
@@ -43,3 +45,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Initial release with database, vhost, SSL, and cron management
 - Interactive menu system
 - Single-file architecture
+
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/markus-michalski/osticket-prioritiy-icons/releases/tag/v2.0.0
