@@ -9,6 +9,10 @@ A modular Bash toolkit for managing MySQL databases, Apache virtual hosts, Let's
 - **SSL Management** - Let's Encrypt certificates via Certbot with automatic renewal
 - **Cron Management** - System-wide cron jobs via `/etc/cron.d`
 - **Security** - Input validation, audit logging, automatic backups before destructive operations
+- **Firewall Management** - UFW firewall rules via CLI and interactive menu
+- **Fail2Ban Management** - Jail status, ban/unban IPs, configuration overview
+- **Log Viewer** - View and search Apache, MySQL, and audit logs
+- **System Status** - Overview of services, disk usage, and system health
 - **Interactive Menu** - TUI-based menu system for easy server administration
 
 ## Requirements
@@ -99,6 +103,11 @@ lib/
 ├── vhost.sh       # Apache virtual host management
 ├── ssl.sh         # Let's Encrypt certificate management
 ├── cron.sh        # System cron job management
+├── status.sh      # System status overview
+├── log.sh         # Log viewer and search
+├── firewall.sh    # UFW firewall management
+├── fail2ban.sh    # Fail2Ban jail management
+├── cli.sh         # CLI argument parsing and routing
 └── menu.sh        # Interactive TUI menus
 ```
 
@@ -183,6 +192,13 @@ server-tools-v2/
 ├── Makefile
 └── .github/workflows/ci.yml     # CI pipeline
 ```
+
+## Documentation
+
+Detailed setup guides and usage instructions:
+
+- [English](https://faq.markus-michalski.net/en/bash-scripts/server-tools)
+- [Deutsch](https://faq.markus-michalski.net/de/bash-scripts/server-tools)
 
 ## Contributing
 
