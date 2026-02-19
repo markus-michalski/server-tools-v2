@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Nothing yet
+
+### Changed
+- Nothing yet
+
+### Deprecated
+- Nothing yet
+
+### Removed
+- Nothing yet
+
+### Fixed
+- Nothing yet
+
+### Security
+- Nothing yet
+
+## [2.1.0] - 2026-02-19
+
+### Changed
+- recommend checking out latest release tag instead of main
+- update README with missing modules and documentation links
+- remove trailing blank lines in cli.sh
+
+### Fixed
+- consume stdin in mysql mock to prevent SIGPIPE with pipefail
+
+### Security
+- fix audit findings from comprehensive code review
+- harden credential handling, config sourcing, and input validation
 ## [2.0.0] - 2026-02-18
 
 ### Added
@@ -46,5 +77,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Interactive menu system
 - Single-file architecture
 
-[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.1.0...HEAD
 [2.0.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.0.0
+[2.1.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.0
