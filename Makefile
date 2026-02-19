@@ -12,6 +12,7 @@ install: ## Install server-tools system-wide (requires root)
 	@if [ "$$(id -u)" -ne 0 ]; then echo "Error: install requires root"; exit 1; fi
 	install -d /usr/local/lib/server-tools
 	install -m 644 lib/*.sh /usr/local/lib/server-tools/
+	echo "$(VERSION)" > /usr/local/lib/server-tools/.version
 	install -m 755 bin/server-tools /usr/local/bin/server-tools
 	ln -sf /usr/local/bin/server-tools /usr/local/bin/st
 	@echo "Installed server-tools $(VERSION)"

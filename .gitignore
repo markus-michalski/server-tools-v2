@@ -2,3 +2,4 @@
 tests/libs/
 CLAUDE.md
 node_modules/
+lib/.version
