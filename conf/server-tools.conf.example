@@ -74,6 +74,14 @@
 # Enable audit logging
 #ST_AUDIT_LOGGING=true
 
+# --- Logrotate ---
+
+# Max age in days for rotated log files
+#ST_LOGROTATE_DAYS=14
+
+# Number of rotated log files to keep (52 = ~1 year with weekly rotation)
+#ST_LOGROTATE_ROTATE=52
+
 # --- Logs ---
 
 # Apache log directory

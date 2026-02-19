@@ -219,3 +219,53 @@ teardown() {
     run force_https "bad;domain"
     assert_failure
 }
+
+# =============================================================================
+# LOGROTATE
+# =============================================================================
+
+@test "generate_logrotate_config contains domain log path" {
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "/var/www/example.com/logs/*.log"
+}
+
+@test "generate_logrotate_config contains weekly rotation" {
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "weekly"
+}
+
+@test "generate_logrotate_config contains compress directives" {
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "compress"
+    assert_output --partial "delaycompress"
+}
+
+@test "generate_logrotate_config contains postrotate with apache reload" {
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "postrotate"
+    assert_output --partial "systemctl reload apache2"
+}
+
+@test "generate_logrotate_config uses ST_LOGROTATE_ROTATE value" {
+    export ST_LOGROTATE_ROTATE=10
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "rotate 10"
+}
+
+@test "generate_logrotate_config uses ST_LOGROTATE_DAYS for maxage" {
+    export ST_LOGROTATE_DAYS=30
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "maxage 30"
+}
+
+@test "generate_logrotate_config sets correct file permissions" {
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "create 640 www-data www-data"
+}
