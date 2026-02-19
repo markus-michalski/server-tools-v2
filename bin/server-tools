@@ -195,11 +195,11 @@ args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes | -y)
-            ST_AUTO_CONFIRM="true"
+            export ST_AUTO_CONFIRM="true"
             shift
             ;;
         --quiet | -q)
-            ST_QUIET="true"
+            export ST_QUIET="true"
             shift
             ;;
         *)
