@@ -192,11 +192,11 @@ args=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --yes | -y)
-            export ST_AUTO_CONFIRM="true"
+            ST_AUTO_CONFIRM="true"
             shift
             ;;
         --quiet | -q)
-            export ST_QUIET="true"
+            ST_QUIET="true"
             shift
             ;;
         *)
@@ -226,48 +226,56 @@ case "${1:-}" in
     db | database)
         check_root
         load_config
+        check_dependencies
         shift
         cli_database "$@"
         ;;
     vhost)
         check_root
         load_config
+        check_dependencies
         shift
         cli_vhost "$@"
         ;;
     ssl)
         check_root
         load_config
+        check_dependencies
         shift
         cli_ssl "$@"
         ;;
     cron)
         check_root
         load_config
+        check_dependencies
         shift
         cli_cron "$@"
         ;;
     firewall | fw)
         check_root
         load_config
+        check_dependencies
         shift
         cli_firewall "$@"
         ;;
     fail2ban | f2b)
         check_root
         load_config
+        check_dependencies
         shift
         cli_fail2ban "$@"
         ;;
     logs | log)
         check_root
         load_config
+        check_dependencies
         shift
         cli_logs "$@"
         ;;
     status)
         check_root
         load_config
+        check_dependencies
         shift
         cli_status "$@"
         ;;

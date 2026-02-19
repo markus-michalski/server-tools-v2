@@ -31,6 +31,11 @@ tail_logfile() {
         return 1
     fi
 
+    # Validate lines is a positive integer
+    if [[ ! "$lines" =~ ^[0-9]+$ ]] || [[ "$lines" -lt 1 ]]; then
+        lines="$ST_LOG_LINES"
+    fi
+
     tail -n "$lines" "$file"
 }
 
@@ -40,12 +45,17 @@ grep_logfile() {
     local pattern="$2"
     local lines="${3:-$ST_LOG_LINES}"
 
+    # Validate lines is a positive integer
+    if [[ ! "$lines" =~ ^[0-9]+$ ]] || [[ "$lines" -lt 1 ]]; then
+        lines="$ST_LOG_LINES"
+    fi
+
     if [[ ! -f "$file" ]]; then
         log_error "Log file not found: $file"
         return 1
     fi
 
-    grep -i "$pattern" "$file" 2>/dev/null | tail -n "$lines"
+    grep -i -e "$pattern" -- "$file" 2>/dev/null | tail -n "$lines"
 }
 
 # Get the error log path for a domain

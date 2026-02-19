@@ -82,7 +82,7 @@ show_service_status() {
         status=$(check_service "$service")
         local color=""
         local reset=""
-        if [[ "${NO_COLOR:-}" != "1" ]]; then
+        if [[ -z "${NO_COLOR:-}" ]]; then
             if [[ "$status" == "running" ]]; then
                 color="${_GREEN:-}"
             elif [[ "$status" == "stopped" ]]; then
@@ -103,7 +103,7 @@ show_service_status() {
             status=$(check_service "$fpm_service")
             local color=""
             local reset=""
-            if [[ "${NO_COLOR:-}" != "1" ]]; then
+            if [[ -z "${NO_COLOR:-}" ]]; then
                 if [[ "$status" == "running" ]]; then
                     color="${_GREEN:-}"
                 elif [[ "$status" == "stopped" ]]; then

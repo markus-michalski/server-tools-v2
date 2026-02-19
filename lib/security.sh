@@ -156,10 +156,13 @@ audit_log() {
     local severity="$1"
     shift
     local action="$*"
+    # Strip newlines to prevent log injection
+    action="${action//$'\n'/ }"
+    action="${action//$'\r'/}"
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local user
-    user=$(whoami)
+    user="${SUDO_USER:-$(whoami)}"
 
     # Create log file if needed
     if [[ ! -f "$ST_AUDIT_LOG" ]]; then
@@ -179,7 +182,7 @@ audit_log() {
 
 # --- Password generation ---
 
-# Generate a cryptographically secure password (256-bit entropy)
+# Generate a cryptographically secure password (~6 bits/char entropy)
 generate_password() {
     local length="${1:-$ST_PASSWORD_LENGTH}"
     openssl rand -base64 32 | tr -d "=+/" | cut -c1-"$length"
@@ -206,9 +209,13 @@ safe_write_file() {
     # Write to temp file, then atomic rename
     local tmp_file
     tmp_file=$(mktemp "${file_path}.XXXXXX")
-    echo "$content" >"$tmp_file"
-    chmod "$permissions" "$tmp_file"
-    mv -f "$tmp_file" "$file_path"
+
+    # Clean up temp file on failure to prevent sensitive data leaks
+    if ! { echo "$content" >"$tmp_file" && chmod "$permissions" "$tmp_file" && mv -f "$tmp_file" "$file_path"; }; then
+        rm -f "$tmp_file"
+        umask "$old_umask"
+        return 1
+    fi
 
     umask "$old_umask"
 }

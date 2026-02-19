@@ -113,6 +113,12 @@ validate_config() {
         ST_PASSWORD_MIN_LENGTH=12
     fi
 
+    # Credential file permissions must be restrictive
+    if [[ "$ST_CREDENTIAL_FILE_PERMISSIONS" != "600" ]] && [[ "$ST_CREDENTIAL_FILE_PERMISSIONS" != "400" ]]; then
+        log_warn "ST_CREDENTIAL_FILE_PERMISSIONS must be 600 or 400, got: $ST_CREDENTIAL_FILE_PERMISSIONS. Resetting to 600."
+        ST_CREDENTIAL_FILE_PERMISSIONS=600
+    fi
+
     # Backup retention bounds
     if [[ "$ST_BACKUP_RETENTION_DAYS" -lt 1 ]] || [[ "$ST_BACKUP_RETENTION_DAYS" -gt 365 ]]; then
         log_warn "ST_BACKUP_RETENTION_DAYS should be between 1 and 365, got: $ST_BACKUP_RETENTION_DAYS. Resetting to 30."

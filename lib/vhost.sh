@@ -405,28 +405,33 @@ change_php_version() {
 
     log_info "Changing PHP version for '$domain' to $php_version..."
 
-    # Backup before modification
-    if ! cp "$config" "${config}.backup"; then
+    # Backup to temp dir (not in Apache config dir to avoid stale .backup files)
+    local config_backup
+    config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
+    if ! cp "$config" "$config_backup"; then
         log_error "Failed to backup configuration"
+        rm -f "$config_backup"
         return 1
     fi
 
     # Replace PHP version in config
     if ! sed -i "s|proxy:unix:/run/php/php[0-9.]*-fpm.sock|proxy:unix:/run/php/php${php_version}-fpm.sock|g" "$config"; then
         log_error "Failed to update configuration"
-        mv "${config}.backup" "$config"
+        cp "$config_backup" "$config"
+        rm -f "$config_backup"
         return 1
     fi
 
     # Safe reload with rollback
     if ! reload_apache; then
         log_error "Apache reload failed - rolling back..."
-        mv "${config}.backup" "$config"
+        cp "$config_backup" "$config"
+        rm -f "$config_backup"
         reload_apache || true
         return 1
     fi
 
-    rm -f "${config}.backup"
+    rm -f "$config_backup"
     audit_log "INFO" "Changed PHP version for $domain to $php_version"
     log_info "PHP version for '$domain' changed to $php_version"
 }
@@ -550,7 +555,7 @@ create_redirect() {
     local config
     config=$(generate_redirect_config "$source_domain" "$target_url" "$code")
 
-    echo "$config" >"$config_file"
+    safe_write_file "$config_file" "$config" 644
     enable_site "$source_domain" || return 1
     reload_apache || return 1
 
@@ -577,8 +582,13 @@ add_www_redirect() {
         a2enmod rewrite &>/dev/null
     fi
 
-    # Backup config
-    cp "$config_file" "${config_file}.bak" || return 1
+    # Backup to temp dir (not in Apache config dir to avoid stale .bak files)
+    local config_backup
+    config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
+    cp "$config_file" "$config_backup" || {
+        rm -f "$config_backup"
+        return 1
+    }
 
     local snippet
     snippet=$(generate_www_redirect_snippet "$domain" "$direction")
@@ -588,12 +598,13 @@ add_www_redirect() {
 
     reload_apache || {
         log_warn "Apache reload failed, restoring backup..."
-        cp "${config_file}.bak" "$config_file"
+        cp "$config_backup" "$config_file"
+        rm -f "$config_backup"
         reload_apache
         return 1
     }
 
-    rm -f "${config_file}.bak"
+    rm -f "$config_backup"
     audit_log "INFO" "Added www redirect for $domain ($direction)"
     log_info "WWW redirect added for $domain"
 }
@@ -616,8 +627,13 @@ force_https() {
         a2enmod rewrite &>/dev/null
     fi
 
-    # Backup config
-    cp "$config_file" "${config_file}.bak" || return 1
+    # Backup to temp dir (not in Apache config dir to avoid stale .bak files)
+    local config_backup
+    config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
+    cp "$config_file" "$config_backup" || {
+        rm -f "$config_backup"
+        return 1
+    }
 
     local snippet
     snippet=$(generate_https_redirect_snippet "$domain")
@@ -627,12 +643,13 @@ force_https() {
 
     reload_apache || {
         log_warn "Apache reload failed, restoring backup..."
-        cp "${config_file}.bak" "$config_file"
+        cp "$config_backup" "$config_file"
+        rm -f "$config_backup"
         reload_apache
         return 1
     }
 
-    rm -f "${config_file}.bak"
+    rm -f "$config_backup"
     audit_log "INFO" "Added HTTPS redirect for $domain"
     log_info "HTTPS redirect added for $domain"
 }

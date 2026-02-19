@@ -306,7 +306,8 @@ recreate_all_ssl() {
     for domain in "${domains[@]}"; do
         echo ""
         echo "Processing: $domain"
-        if certbot --apache -d "$domain" --non-interactive --agree-tos --email "webmaster@${domain}" --quiet; then
+        local email="${ST_CERTBOT_EMAIL:-webmaster@${domain}}"
+        if certbot --apache -d "$domain" --non-interactive --agree-tos --email "$email" --quiet; then
             echo "  OK: $domain"
             ((success++))
         else

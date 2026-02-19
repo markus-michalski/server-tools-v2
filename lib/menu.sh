@@ -24,7 +24,9 @@ source "${BASH_SOURCE%/*}/fail2ban.sh"
 # MENU HELPERS
 # =============================================================================
 
-# Display a menu and read user choice
+# Display a menu and read user choice into MENU_CHOICE
+# Note: MENU_CHOICE is intentionally global so callers can read it after show_menu returns.
+# Menus are always sequential (never nested), so this is safe.
 show_menu() {
     local title="$1"
     shift
@@ -41,6 +43,7 @@ show_menu() {
     done
 
     echo ""
+    MENU_CHOICE=""
     read -r -p "Choose an option (1-${#options[@]}): " MENU_CHOICE
 }
 

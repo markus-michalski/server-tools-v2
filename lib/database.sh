@@ -194,18 +194,16 @@ dump_database() {
         chmod 700 "$output_dir"
     fi
 
-    local _old_opts
-    _old_opts=$(set +o)
-    set -o pipefail
-
-    if ! mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
-        "$db_name" 2>/dev/null | gzip >"$output_file"; then
-        eval "$_old_opts"
+    # Run pipeline in subshell to scope pipefail without eval
+    if ! (
+        set -o pipefail
+        mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+            "$db_name" 2>/dev/null | gzip >"$output_file"
+    ); then
         rm -f "$output_file"
         return 1
     fi
 
-    eval "$_old_opts"
     chmod 600 "$output_file"
     echo "$output_file"
 }
@@ -214,34 +212,32 @@ dump_database() {
 restore_dump() {
     local db_name="$1"
     local dump_file="$2"
-    local escaped
-    escaped=$(mysql_escape "$db_name")
 
-    # Enable pipefail locally so pipeline errors are caught
-    local _old_opts
-    _old_opts=$(set +o)
-    set -o pipefail
-
-    local rc=0
+    # Validate format before running (avoids early return inside subshell)
     case "$dump_file" in
-        *.sql.gz)
-            gunzip -c "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" 2>&1 || rc=$?
-            ;;
-        *.sql.zip)
-            unzip -p "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" 2>&1 || rc=$?
-            ;;
-        *.sql)
-            mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" <"$dump_file" 2>&1 || rc=$?
-            ;;
+        *.sql.gz | *.sql.zip | *.sql) ;;
         *)
-            eval "$_old_opts"
             log_error "Unsupported file format: $dump_file (expected .sql, .sql.gz, .sql.zip)"
             return 1
             ;;
     esac
 
-    # Restore original shell options
-    eval "$_old_opts"
+    # Run in subshell to scope pipefail; use raw db_name as CLI arg (not SQL-escaped)
+    local rc=0
+    (
+        set -o pipefail
+        case "$dump_file" in
+            *.sql.gz)
+                gunzip -c "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
+                ;;
+            *.sql.zip)
+                unzip -p "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
+                ;;
+            *.sql)
+                mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" <"$dump_file" 2>&1
+                ;;
+        esac
+    ) || rc=$?
 
     if [[ $rc -ne 0 ]]; then
         log_error "Restore failed for $dump_file (exit code: $rc)"
@@ -254,29 +250,30 @@ export_to_file() {
     local db_name="$1"
     local output_file="$2"
 
-    local _old_opts
-    _old_opts=$(set +o)
-    set -o pipefail
-
-    local rc=0
-    # Determine compression from extension
+    # Validate format before running (avoids early return inside subshell)
     case "$output_file" in
-        *.sql.gz)
-            mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
-                "$db_name" 2>/dev/null | gzip >"$output_file" || rc=$?
-            ;;
-        *.sql)
-            mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
-                "$db_name" >"$output_file" 2>/dev/null || rc=$?
-            ;;
+        *.sql.gz | *.sql) ;;
         *)
-            eval "$_old_opts"
             log_error "Unsupported output format: $output_file (use .sql or .sql.gz)"
             return 1
             ;;
     esac
 
-    eval "$_old_opts"
+    # Run in subshell to scope pipefail
+    local rc=0
+    (
+        set -o pipefail
+        case "$output_file" in
+            *.sql.gz)
+                mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                    "$db_name" 2>/dev/null | gzip >"$output_file"
+                ;;
+            *.sql)
+                mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                    "$db_name" >"$output_file" 2>/dev/null
+                ;;
+        esac
+    ) || rc=$?
 
     if [[ $rc -ne 0 ]]; then
         rm -f "$output_file"
@@ -680,6 +677,12 @@ backup_all_databases() {
     log_info "Backing up all databases..."
 
     for db in $databases; do
+        # Validate db name from SHOW DATABASES output before using in file paths
+        if ! validate_input "$db" "database"; then
+            log_warn "Skipping invalid database name: $db"
+            ((failed++))
+            continue
+        fi
         log_info "Backing up '$db'..."
         local dump_file
         dump_file=$(dump_database "$db") || {
