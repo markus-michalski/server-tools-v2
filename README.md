@@ -42,6 +42,15 @@ This installs:
 - Shortcuts: `st`, `servertools`
 - Default config to `/etc/server-tools/config`
 
+### Updating
+
+```bash
+cd server-tools-v2
+git pull --tags
+git checkout "$(git tag -l 'v*' | sort -V | tail -1)"
+sudo ./bin/server-tools install
+```
+
 ### Manual Usage (without install)
 
 ```bash
