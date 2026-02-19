@@ -316,6 +316,17 @@ delete_vhost() {
         return 1
     fi
 
+    # Block deletion if a domain user is assigned
+    if command_exists getent; then
+        local domain_user
+        domain_user=$(getent passwd | awk -F: -v home="/var/www/${domain}" '$6 == home && $3 >= 1000 { print $1; exit }')
+        if [[ -n "$domain_user" ]]; then
+            log_error "Domain '$domain' has assigned user '$domain_user'."
+            log_error "Delete user first: server-tools user delete --username $domain_user"
+            return 1
+        fi
+    fi
+
     local docroot
     docroot=$(get_vhost_docroot "$domain")
 
