@@ -85,7 +85,7 @@ check_root() {
 check_dependencies() {
     local missing=()
 
-    for cmd in mysql apache2ctl openssl; do
+    for cmd in mysql mysqldump apache2ctl openssl gzip systemctl realpath; do
         if ! command_exists "$cmd"; then
             missing+=("$cmd")
         fi

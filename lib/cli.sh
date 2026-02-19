@@ -799,28 +799,3 @@ EOF
             ;;
     esac
 }
-
-# =============================================================================
-# GLOBAL CLI FLAGS
-# =============================================================================
-
-# Parse global flags (--yes, --quiet) before subcommand routing
-parse_global_flags() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --yes | -y)
-                export ST_AUTO_CONFIRM="true"
-                shift
-                ;;
-            --quiet | -q)
-                export ST_QUIET="true"
-                shift
-                ;;
-            *)
-                # Return remaining args
-                echo "$@"
-                return 0
-                ;;
-        esac
-    done
-}

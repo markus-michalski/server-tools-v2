@@ -206,6 +206,8 @@ setup_ssl_renewal() {
         # Generate inline if source not available
         cat >"$renewal_dest" <<'RENEWEOF'
 #!/bin/bash
+set -euo pipefail
+
 # SSL Certificate Renewal Script
 # Runs daily via cron, renews certs expiring within 30 days
 
@@ -214,13 +216,15 @@ DATE=$(date '+%Y-%m-%d %H:%M:%S')
 
 echo "[$DATE] Starting SSL renewal check..." >> "$LOG"
 
-if certbot renew --quiet --no-self-upgrade --apache >> "$LOG" 2>&1; then
+certbot_exit=0
+certbot renew --quiet --no-self-upgrade --apache >> "$LOG" 2>&1 || certbot_exit=$?
+if [[ $certbot_exit -eq 0 ]]; then
     echo "[$DATE] Renewal completed successfully" >> "$LOG"
 else
-    echo "[$DATE] Renewal had issues (exit $?), check certbot logs" >> "$LOG"
+    echo "[$DATE] Renewal had issues (exit $certbot_exit), check certbot logs" >> "$LOG"
 fi
 
-systemctl reload apache2 2>/dev/null
+systemctl reload apache2 >> "$LOG" 2>&1 || echo "[$DATE] Apache reload failed" >> "$LOG"
 echo "[$DATE] SSL renewal process finished" >> "$LOG"
 RENEWEOF
         chmod 755 "$renewal_dest"
@@ -334,12 +338,29 @@ certbot_dns_plugin_installed() {
         return 1
     fi
 
-    command_exists "certbot" && dpkg -l "python3-certbot-dns-${provider}" &>/dev/null 2>&1
+    command_exists "certbot" && dpkg -l "python3-certbot-dns-${provider}" &>/dev/null
+}
+
+# Supported DNS providers for certbot
+readonly _VALID_DNS_PROVIDERS="cloudflare digitalocean route53 google linode ovh"
+
+# Validate DNS provider against whitelist
+validate_dns_provider() {
+    local provider="$1"
+    local p
+    for p in $_VALID_DNS_PROVIDERS; do
+        [[ "$provider" == "$p" ]] && return 0
+    done
+    log_error "Unsupported DNS provider: $provider"
+    log_error "Supported: $_VALID_DNS_PROVIDERS"
+    return 1
 }
 
 # Install certbot DNS plugin
 install_certbot_dns_plugin() {
     local provider="$1"
+
+    validate_dns_provider "$provider" || return 1
 
     log_info "Installing certbot DNS plugin for $provider..."
     apt-get update -qq && apt-get install -y -qq "python3-certbot-dns-${provider}" 2>&1

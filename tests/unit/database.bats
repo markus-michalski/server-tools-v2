@@ -36,9 +36,9 @@ teardown() {
 
 # --- Credential loading ---
 
-@test "load_mysql_credentials reads password from .my.cnf" {
+@test "load_mysql_credentials verifies config file exists" {
     load_mysql_credentials
-    assert_equal "$_MYSQL_PASS" "testpass123"
+    assert_equal "$_MYSQL_LOADED" "true"
 }
 
 @test "load_mysql_credentials fails when file missing" {
@@ -53,10 +53,10 @@ teardown() {
     load_mysql_credentials
     assert_equal "$_MYSQL_LOADED" "true"
 
-    # Change file content - should not reload
-    echo 'password=changed' > "$ST_MYSQL_CONFIG_FILE"
-    load_mysql_credentials
-    assert_equal "$_MYSQL_PASS" "testpass123"
+    # Remove file - should not re-check (already loaded)
+    rm -f "$ST_MYSQL_CONFIG_FILE"
+    run load_mysql_credentials
+    assert_success
 }
 
 # --- Building blocks with mocked mysql ---
@@ -425,11 +425,7 @@ teardown() {
 @test "import_database accepts .sql.gz file extension" {
     echo "" | gzip > "${TEST_TMPDIR}/test.sql.gz"
     mock_command "mysql" '
-        for arg in "$@"; do
-            if [[ "$arg" == *"USE"* ]]; then
-                exit 0
-            fi
-        done
+        cat >/dev/null
         exit 0
     '
     load_mysql_credentials

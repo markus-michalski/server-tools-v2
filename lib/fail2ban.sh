@@ -132,7 +132,7 @@ unban_ip() {
     for jail in $jails; do
         local ips
         ips=$(get_banned_ips "$jail")
-        if echo "$ips" | grep -q "$ip"; then
+        if echo "$ips" | grep -qw "$ip"; then
             found_in="$found_in $jail"
         fi
     done

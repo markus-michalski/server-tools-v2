@@ -59,6 +59,20 @@ add_cron() {
 
     validate_input "$schedule" "cron_schedule" || return 1
 
+    # Validate cron command (prevent injection via newlines or non-printable chars)
+    if [[ "$command" == *$'\n'* ]]; then
+        log_error "Cron command must not contain newlines"
+        return 1
+    fi
+    if [[ ${#command} -gt 500 ]]; then
+        log_error "Cron command too long (max 500 chars)"
+        return 1
+    fi
+    if [[ ! "$command" =~ ^[[:print:]]+$ ]]; then
+        log_error "Cron command contains non-printable characters"
+        return 1
+    fi
+
     # Generate name if not provided
     if [[ -z "$name" ]]; then
         name="custom_$(date +%s)"
