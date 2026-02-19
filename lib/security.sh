@@ -127,6 +127,39 @@ validate_input() {
                 return 1
             fi
             ;;
+        linux_username)
+            # POSIX username: lowercase letter/underscore start, max 32 chars
+            if [[ ! "$input" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+                log_error "Invalid Linux username: $input (lowercase, start with letter/underscore, max 32 chars)"
+                return 1
+            fi
+            # Reject existing system accounts (UID < 1000)
+            if getent passwd "$input" &>/dev/null; then
+                local existing_uid
+                existing_uid=$(getent passwd "$input" | cut -d: -f3)
+                if [[ "$existing_uid" -lt 1000 ]]; then
+                    log_error "Reserved system username: $input (UID $existing_uid)"
+                    return 1
+                fi
+            fi
+            ;;
+        ssh_public_key)
+            # Reject newlines (injection prevention)
+            if [[ "$input" == *$'\n'* ]] || [[ "$input" == *$'\r'* ]]; then
+                log_error "SSH key must not contain newlines"
+                return 1
+            fi
+            # Length guard: min 40 chars (shortest valid key), max 8192 chars
+            if [[ ${#input} -lt 40 ]] || [[ ${#input} -gt 8192 ]]; then
+                log_error "Invalid SSH key length (must be 40-8192 characters)"
+                return 1
+            fi
+            # SSH public key format: ssh-rsa, ssh-ed25519, ecdsa-sha2-*, sk-* (FIDO2)
+            if [[ ! "$input" =~ ^(sk-)?(ssh-(rsa|ed25519)(@openssh\.com)?|ecdsa-sha2-nistp(256|384|521)(@openssh\.com)?)[[:space:]]+[A-Za-z0-9+/=]+([[:space:]].*)?$ ]]; then
+                log_error "Invalid SSH public key format"
+                return 1
+            fi
+            ;;
         *)
             log_error "Unknown validation type: $type"
             return 1

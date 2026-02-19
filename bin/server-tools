@@ -20,7 +20,7 @@ else
 fi
 
 # Source all libraries
-for lib in core config security backup database vhost ssl cron status log firewall fail2ban cli menu; do
+for lib in core config security backup database vhost ssl cron status log firewall fail2ban user cli menu; do
     # shellcheck source=/dev/null
     source "${LIB_DIR}/${lib}.sh"
 done
@@ -148,6 +148,7 @@ INTERACTIVE MODE:
 COMMANDS:
   db, database              Database management
   vhost                     Virtual host management
+  user                      SSH user management (per-domain)
   ssl                       SSL certificate management
   cron                      Cron job management
   firewall, fw              UFW firewall management
@@ -170,6 +171,8 @@ EXAMPLES:
   server-tools db backup --name mydb
   server-tools vhost create --domain example.com --php 8.3
   server-tools ssl create --domain example.com
+  server-tools user create --domain example.com --username dev1
+  server-tools user add-key --username dev1 --key "ssh-ed25519 ..."
   server-tools firewall allow --port 8080 --proto tcp
   server-tools fail2ban status
   server-tools logs apache --domain example.com --lines 100
@@ -236,6 +239,12 @@ case "${1:-}" in
         check_dependencies
         shift
         cli_vhost "$@"
+        ;;
+    user)
+        check_root
+        load_config
+        shift
+        cli_user "$@"
         ;;
     ssl)
         check_root

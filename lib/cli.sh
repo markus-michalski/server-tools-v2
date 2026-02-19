@@ -799,3 +799,118 @@ EOF
             ;;
     esac
 }
+
+# =============================================================================
+# USER CLI
+# =============================================================================
+
+cli_user() {
+    local action="${1:-}"
+    shift 2>/dev/null || true
+
+    case "$action" in
+        create)
+            local domain="" username=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --username)
+                        username="$2"
+                        shift 2
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$domain" || -z "$username" ]] && cli_usage "user create" "--domain <domain> --username <user>"
+            create_domain_user "$domain" "$username"
+            ;;
+        delete)
+            local username=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --username)
+                        username="$2"
+                        shift 2
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$username" ]] && cli_usage "user delete" "--username <user>"
+            delete_domain_user "$username"
+            ;;
+        list)
+            list_domain_users
+            ;;
+        add-key)
+            local username="" key=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --username)
+                        username="$2"
+                        shift 2
+                        ;;
+                    --key)
+                        key="$2"
+                        shift 2
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$username" || -z "$key" ]] && cli_usage "user add-key" "--username <user> --key \"ssh-ed25519 ...\""
+            add_ssh_key "$username" "$key"
+            ;;
+        set-password)
+            local username="" password=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --username)
+                        username="$2"
+                        shift 2
+                        ;;
+                    --password)
+                        password="$2"
+                        shift 2
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$username" ]] && cli_usage "user set-password" "--username <user> [--password <pass>]"
+            set_user_password "$username" "$password"
+            ;;
+        info)
+            local username=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --username)
+                        username="$2"
+                        shift 2
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            [[ -z "$username" ]] && cli_usage "user info" "--username <user>"
+            show_user_info "$username"
+            ;;
+        --help | -h | "")
+            cat <<EOF
+Usage: server-tools user <action> [options]
+
+Actions:
+  create        Create SSH user for a domain
+  delete        Delete SSH user (restores www-data ownership)
+  list          List all domain users
+  add-key       Add SSH public key to user
+  set-password  Set user password
+  info          Show user details
+
+Run 'server-tools user <action> --help' for details.
+EOF
+            ;;
+        *)
+            die "Unknown user action: $action. Use 'server-tools user --help'"
+            ;;
+    esac
+}

@@ -93,6 +93,11 @@
 # Default number of log lines to display
 #ST_LOG_LINES=50
 
+# --- SSH User Management ---
+
+# Default shell for new domain users (/bin/bash, /usr/bin/zsh, /usr/sbin/nologin)
+#ST_USER_DEFAULT_SHELL="/bin/bash"
+
 # --- Credential Files ---
 
 # File permissions for credential files (octal)

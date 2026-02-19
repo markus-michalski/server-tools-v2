@@ -58,6 +58,9 @@ ST_ALLOWED_DOCROOT_PATHS="${ST_ALLOWED_DOCROOT_PATHS:-/var/www:/srv/www}"
 ST_CREDENTIAL_FILE_PERMISSIONS="${ST_CREDENTIAL_FILE_PERMISSIONS:-600}"
 ST_AUDIT_LOGGING="${ST_AUDIT_LOGGING:-true}"
 
+# SSH User Management
+ST_USER_DEFAULT_SHELL="${ST_USER_DEFAULT_SHELL:-/bin/bash}"
+
 # --- Functions ---
 
 # Load configuration from file

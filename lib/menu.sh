@@ -19,6 +19,7 @@ source "${BASH_SOURCE%/*}/status.sh"
 source "${BASH_SOURCE%/*}/log.sh"
 source "${BASH_SOURCE%/*}/firewall.sh"
 source "${BASH_SOURCE%/*}/fail2ban.sh"
+source "${BASH_SOURCE%/*}/user.sh"
 
 # =============================================================================
 # MENU HELPERS
@@ -597,6 +598,75 @@ log_menu() {
 }
 
 # =============================================================================
+# USER MENU
+# =============================================================================
+
+user_menu() {
+    local submenu=true
+
+    while $submenu; do
+        show_menu "SSH User Management" \
+            "Create user for domain" \
+            "Delete user" \
+            "List domain users" \
+            "Add SSH key" \
+            "Set password" \
+            "Show user info" \
+            "Back to main menu"
+
+        case $MENU_CHOICE in
+            1)
+                local domain username
+                list_vhosts 2>/dev/null || true
+                echo ""
+                read -r -p "Domain: " domain
+                read -r -p "Username: " username
+                create_domain_user "$domain" "$username" || true
+                press_enter
+                ;;
+            2)
+                local username
+                list_domain_users || true
+                echo ""
+                read -r -p "Username to delete: " username
+                delete_domain_user "$username" || true
+                press_enter
+                ;;
+            3)
+                list_domain_users || true
+                press_enter
+                ;;
+            4)
+                local username key
+                read -r -p "Username: " username
+                read -r -p "SSH public key: " key
+                add_ssh_key "$username" "$key" || true
+                press_enter
+                ;;
+            5)
+                local username
+                read -r -p "Username: " username
+                set_user_password "$username" || true
+                press_enter
+                ;;
+            6)
+                local username
+                read -r -p "Username: " username
+                show_user_info "$username" || true
+                press_enter
+                ;;
+            7)
+                submenu=false
+                ;;
+            *)
+                log_error "Invalid option"
+                press_enter
+                ;;
+        esac
+    done
+}
+
+# =============================================================================
 # MAIN MENU
 # =============================================================================
 
@@ -607,6 +677,7 @@ main_menu() {
         show_menu "Server Tools v${ST_VERSION}" \
             "Database Management" \
             "Virtual Host Management" \
+            "SSH User Management" \
             "SSL Certificate Management" \
             "Cron Job Management" \
             "Firewall Management" \
@@ -618,16 +689,17 @@ main_menu() {
         case $MENU_CHOICE in
             1) database_menu ;;
             2) vhost_menu ;;
-            3) ssl_menu ;;
-            4) cron_menu ;;
-            5) firewall_menu ;;
-            6) fail2ban_menu ;;
-            7) log_menu ;;
-            8)
+            3) user_menu ;;
+            4) ssl_menu ;;
+            5) cron_menu ;;
+            6) firewall_menu ;;
+            7) fail2ban_menu ;;
+            8) log_menu ;;
+            9)
                 show_full_status
                 press_enter
                 ;;
-            9)
+            10)
                 echo "Goodbye!"
                 running=false
                 ;;
