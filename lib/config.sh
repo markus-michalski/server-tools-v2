@@ -69,12 +69,28 @@ load_config() {
         return 0
     fi
 
-    # Check file permissions
-    local perms
-    perms=$(stat -c '%a' "$config_file" 2>/dev/null || stat -f '%A' "$config_file" 2>/dev/null)
-    if [[ "${perms: -1}" =~ [4-7] ]]; then
-        log_warn "Config file is world-readable: $config_file (permissions: $perms)"
-        log_warn "Recommendation: chmod 600 $config_file"
+    # Security checks only when running as root (prevents privilege escalation)
+    if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+        # Check ownership: must be owned by root
+        local owner
+        owner=$(stat -c '%U' "$config_file" 2>/dev/null || stat -f '%Su' "$config_file" 2>/dev/null)
+        if [[ -n "$owner" ]] && [[ "$owner" != "root" ]]; then
+            die "Config file not owned by root: $config_file (owner: $owner). Aborting."
+        fi
+
+        # Check permissions: must not be world-readable/writable or group-writable
+        local perms
+        perms=$(stat -c '%a' "$config_file" 2>/dev/null || stat -f '%A' "$config_file" 2>/dev/null)
+        if [[ -n "$perms" ]]; then
+            local other_perms="${perms: -1}"
+            if [[ "$other_perms" =~ [1-7] ]]; then
+                die "Config file has unsafe permissions ($perms): $config_file. Fix with: chmod 600 $config_file"
+            fi
+            local group_perms="${perms: -2:1}"
+            if [[ "$group_perms" =~ [2367] ]]; then
+                die "Config file is group-writable ($perms): $config_file. Fix with: chmod 600 $config_file"
+            fi
+        fi
     fi
 
     # Source the config file

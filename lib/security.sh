@@ -50,7 +50,8 @@ validate_input() {
             IFS=':' read -ra allowed <<<"$ST_ALLOWED_DOCROOT_PATHS"
             local path_ok=false
             for base in "${allowed[@]}"; do
-                if [[ "$normalized" == "$base"* ]]; then
+                # Ensure prefix match uses trailing slash to prevent /var/www-evil matching /var/www
+                if [[ "$normalized" == "$base" ]] || [[ "$normalized" == "$base/"* ]]; then
                     path_ok=true
                     break
                 fi
@@ -186,18 +187,28 @@ generate_password() {
 
 # --- Safe file operations ---
 
-# Write file with strict permissions (race condition prevention)
+# Write file with strict permissions (atomic rename, symlink-safe)
 safe_write_file() {
     local file_path="$1"
     local content="$2"
     local permissions="${3:-600}"
 
+    # Reject symlinks to prevent TOCTOU attacks
+    if [[ -L "$file_path" ]]; then
+        log_error "Refusing to write to symlink: $file_path"
+        return 1
+    fi
+
     local old_umask
     old_umask=$(umask)
     umask 077
 
-    echo "$content" >"$file_path"
-    chmod "$permissions" "$file_path"
+    # Write to temp file, then atomic rename
+    local tmp_file
+    tmp_file=$(mktemp "${file_path}.XXXXXX")
+    echo "$content" >"$tmp_file"
+    chmod "$permissions" "$tmp_file"
+    mv -f "$tmp_file" "$file_path"
 
     umask "$old_umask"
 }

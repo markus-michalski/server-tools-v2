@@ -18,8 +18,9 @@ jobs:
 
       - name: Install shfmt
         run: |
-          curl -sS https://webinstall.dev/shfmt | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          SHFMT_VERSION="v3.10.0"
+          curl -sSLo /usr/local/bin/shfmt "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          chmod +x /usr/local/bin/shfmt
 
       - name: Run ShellCheck
         run: shellcheck -x bin/server-tools lib/*.sh

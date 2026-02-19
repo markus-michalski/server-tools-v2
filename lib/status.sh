@@ -84,13 +84,13 @@ show_service_status() {
         local reset=""
         if [[ "${NO_COLOR:-}" != "1" ]]; then
             if [[ "$status" == "running" ]]; then
-                color="${GREEN:-}"
+                color="${_GREEN:-}"
             elif [[ "$status" == "stopped" ]]; then
-                color="${RED:-}"
+                color="${_RED:-}"
             else
-                color="${YELLOW:-}"
+                color="${_YELLOW:-}"
             fi
-            reset="${RESET:-}"
+            reset="${_RESET:-}"
         fi
         printf "  %-20s %s%s%s\n" "$service" "$color" "$status" "$reset"
     done
@@ -105,11 +105,11 @@ show_service_status() {
             local reset=""
             if [[ "${NO_COLOR:-}" != "1" ]]; then
                 if [[ "$status" == "running" ]]; then
-                    color="${GREEN:-}"
+                    color="${_GREEN:-}"
                 elif [[ "$status" == "stopped" ]]; then
-                    color="${RED:-}"
+                    color="${_RED:-}"
                 fi
-                reset="${RESET:-}"
+                reset="${_RESET:-}"
             fi
             printf "  %-20s %s%s%s\n" "$fpm_service" "$color" "$status" "$reset"
         fi

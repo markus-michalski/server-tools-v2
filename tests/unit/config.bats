@@ -32,13 +32,13 @@ teardown() {
     assert_equal "$ST_PASSWORD_LENGTH" "30"
 }
 
-@test "load_config warns about world-readable config" {
-    echo '# test config' > "$ST_CONFIG_FILE"
+@test "load_config skips ownership checks for non-root users" {
+    echo 'ST_PASSWORD_LENGTH=30' > "$ST_CONFIG_FILE"
     chmod 644 "$ST_CONFIG_FILE"
 
+    # Non-root: ownership/permission checks are skipped, config loads normally
     run load_config
     assert_success
-    assert_output --partial "world-readable"
 }
 
 @test "validate_config resets bad password length" {

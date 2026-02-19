@@ -13,15 +13,14 @@ source "${BASH_SOURCE%/*}/config.sh"
 source "${BASH_SOURCE%/*}/security.sh"
 source "${BASH_SOURCE%/*}/backup.sh"
 
-# MySQL credentials (loaded on demand)
-_MYSQL_PASS=""
+# MySQL credentials check (loaded on demand)
 _MYSQL_LOADED=false
 
 # =============================================================================
 # BUILDING BLOCKS - atomic operations, composable
 # =============================================================================
 
-# Load MySQL root credentials from .my.cnf
+# Verify MySQL config file exists and has safe permissions
 load_mysql_credentials() {
     [[ "$_MYSQL_LOADED" == "true" ]] && return 0
 
@@ -30,14 +29,21 @@ load_mysql_credentials() {
         return 1
     fi
 
-    _MYSQL_PASS=$(awk -F '=' '/^password/ {gsub(/[ "'\'']+/, "", $2); print $2}' "$ST_MYSQL_CONFIG_FILE")
+    # Warn if config file has insecure permissions
+    local perms
+    perms=$(stat -c '%a' "$ST_MYSQL_CONFIG_FILE" 2>/dev/null)
+    if [[ -n "$perms" ]] && [[ "$perms" != "600" ]] && [[ "$perms" != "400" ]]; then
+        log_warn "MySQL config has insecure permissions ($perms): $ST_MYSQL_CONFIG_FILE"
+        log_warn "Recommendation: chmod 600 $ST_MYSQL_CONFIG_FILE"
+    fi
+
     _MYSQL_LOADED=true
-    log_debug "MySQL credentials loaded from $ST_MYSQL_CONFIG_FILE"
+    log_debug "MySQL config verified: $ST_MYSQL_CONFIG_FILE"
 }
 
 # Test MySQL connectivity
 mysql_check_connection() {
-    if ! mysql -u"root" -p"${_MYSQL_PASS}" -e "SELECT 1" &>/dev/null; then
+    if ! mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "SELECT 1" &>/dev/null; then
         log_error "Cannot connect to MySQL. Check credentials in $ST_MYSQL_CONFIG_FILE"
         audit_log "ERROR" "MySQL connection failed"
         return 1
@@ -48,7 +54,7 @@ mysql_check_connection() {
 mysql_cmd() {
     local query="$1"
     mysql_check_connection || return 1
-    mysql -u"root" -p"${_MYSQL_PASS}" -e "$query" 2>&1
+    mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "$query" 2>&1
 }
 
 # Check if a database exists
@@ -76,6 +82,16 @@ create_db_only() {
     local collation="${3:-$ST_DEFAULT_COLLATION}"
     local escaped
     escaped=$(mysql_escape "$db_name")
+
+    # Whitelist validation for charset and collation (prevent SQL injection)
+    if [[ ! "$charset" =~ ^[a-zA-Z0-9_]+$ ]]; then
+        log_error "Invalid charset: $charset"
+        return 1
+    fi
+    if [[ ! "$collation" =~ ^[a-zA-Z0-9_]+$ ]]; then
+        log_error "Invalid collation: $collation"
+        return 1
+    fi
 
     if db_exists "$db_name"; then
         log_error "Database '$db_name' already exists"
@@ -178,14 +194,18 @@ dump_database() {
         chmod 700 "$output_dir"
     fi
 
-    mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
-        "$db_name" 2>/dev/null | gzip >"$output_file"
+    local _old_opts
+    _old_opts=$(set +o)
+    set -o pipefail
 
-    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    if ! mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+        "$db_name" 2>/dev/null | gzip >"$output_file"; then
+        eval "$_old_opts"
         rm -f "$output_file"
         return 1
     fi
 
+    eval "$_old_opts"
     chmod 600 "$output_file"
     echo "$output_file"
 }
@@ -197,21 +217,36 @@ restore_dump() {
     local escaped
     escaped=$(mysql_escape "$db_name")
 
+    # Enable pipefail locally so pipeline errors are caught
+    local _old_opts
+    _old_opts=$(set +o)
+    set -o pipefail
+
+    local rc=0
     case "$dump_file" in
         *.sql.gz)
-            gunzip -c "$dump_file" | mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" 2>&1
+            gunzip -c "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" 2>&1 || rc=$?
             ;;
         *.sql.zip)
-            unzip -p "$dump_file" | mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" 2>&1
+            unzip -p "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" 2>&1 || rc=$?
             ;;
         *.sql)
-            mysql -u"root" -p"${_MYSQL_PASS}" "$escaped" <"$dump_file" 2>&1
+            mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$escaped" <"$dump_file" 2>&1 || rc=$?
             ;;
         *)
+            eval "$_old_opts"
             log_error "Unsupported file format: $dump_file (expected .sql, .sql.gz, .sql.zip)"
             return 1
             ;;
     esac
+
+    # Restore original shell options
+    eval "$_old_opts"
+
+    if [[ $rc -ne 0 ]]; then
+        log_error "Restore failed for $dump_file (exit code: $rc)"
+        return 1
+    fi
 }
 
 # Export a database to a specific file path
@@ -219,23 +254,31 @@ export_to_file() {
     local db_name="$1"
     local output_file="$2"
 
+    local _old_opts
+    _old_opts=$(set +o)
+    set -o pipefail
+
+    local rc=0
     # Determine compression from extension
     case "$output_file" in
         *.sql.gz)
-            mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
-                "$db_name" 2>/dev/null | gzip >"$output_file"
+            mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                "$db_name" 2>/dev/null | gzip >"$output_file" || rc=$?
             ;;
         *.sql)
-            mysqldump -u"root" -p"${_MYSQL_PASS}" --single-transaction --routines --triggers \
-                "$db_name" >"$output_file" 2>/dev/null
+            mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                "$db_name" >"$output_file" 2>/dev/null || rc=$?
             ;;
         *)
+            eval "$_old_opts"
             log_error "Unsupported output format: $output_file (use .sql or .sql.gz)"
             return 1
             ;;
     esac
 
-    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+    eval "$_old_opts"
+
+    if [[ $rc -ne 0 ]]; then
         rm -f "$output_file"
         return 1
     fi
@@ -350,9 +393,13 @@ create_database() {
     audit_log "INFO" "Created database: $db_name with user: $username"
     log_info "Database '$db_name' created successfully"
     echo ""
-    echo "  Database: $db_name"
-    echo "  Username: $username"
-    echo "  Password: $password"
+    echo "  Database:    $db_name"
+    echo "  Username:    $username"
+    if [[ -t 1 ]]; then
+        echo "  Password:    $password"
+    else
+        echo "  Password:    (hidden - see credentials file)"
+    fi
     echo "  Credentials: ${ST_CREDENTIAL_DIR}/${db_name}.txt"
 }
 
