@@ -112,7 +112,7 @@ CONFIGEOF
     echo "  Binary installed: ${bin_dir}/server-tools"
 
     # Update LIB_DIR in installed script to point to installed location
-    sed -i "s|LIB_DIR=.*|LIB_DIR=\"${install_dir}\"|" "${bin_dir}/server-tools"
+    sed -i "s|^[[:space:]]*LIB_DIR=.*|    LIB_DIR=\"${install_dir}\"|" "${bin_dir}/server-tools"
 
     # Create shortcuts
     for shortcut in st servertools; do
