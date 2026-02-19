@@ -29,8 +29,11 @@ A modular Bash toolkit for managing MySQL databases, Apache virtual hosts, Let's
 ```bash
 git clone https://github.com/markusmichalski/server-tools-v2.git
 cd server-tools-v2
+git checkout $(git describe --tags --abbrev=0)
 sudo ./bin/server-tools install
 ```
+
+> **Note:** Always check out the latest release tag. The `main` branch may contain untested changes.
 
 This installs:
 - Libraries to `/usr/local/lib/server-tools/`
@@ -43,6 +46,7 @@ This installs:
 ```bash
 git clone https://github.com/markusmichalski/server-tools-v2.git
 cd server-tools-v2
+git checkout $(git describe --tags --abbrev=0)
 sudo ./bin/server-tools
 ```
 
