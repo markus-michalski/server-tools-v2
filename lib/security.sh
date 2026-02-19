@@ -24,16 +24,16 @@ validate_input() {
             fi
             ;;
         database)
-            # MySQL identifier: max 64 chars, alphanumeric + underscore
-            if [[ ! "$input" =~ ^[a-zA-Z0-9_]{1,64}$ ]]; then
-                log_error "Invalid database name: $input (allowed: a-z, 0-9, underscore, max 64 chars)"
+            # MySQL identifier: max 64 chars, alphanumeric + underscore + hyphen
+            if [[ ! "$input" =~ ^[a-zA-Z0-9_-]{1,64}$ ]]; then
+                log_error "Invalid database name: $input (allowed: a-z, 0-9, underscore, hyphen, max 64 chars)"
                 return 1
             fi
             ;;
         username)
-            # MySQL user: max 32 chars, alphanumeric + underscore
-            if [[ ! "$input" =~ ^[a-zA-Z0-9_]{1,32}$ ]]; then
-                log_error "Invalid username: $input (allowed: a-z, 0-9, underscore, max 32 chars)"
+            # MySQL user: max 32 chars, alphanumeric + underscore + hyphen
+            if [[ ! "$input" =~ ^[a-zA-Z0-9_-]{1,32}$ ]]; then
+                log_error "Invalid username: $input (allowed: a-z, 0-9, underscore, hyphen, max 32 chars)"
                 return 1
             fi
             ;;
