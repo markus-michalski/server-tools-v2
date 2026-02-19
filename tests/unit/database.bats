@@ -425,11 +425,7 @@ teardown() {
 @test "import_database accepts .sql.gz file extension" {
     echo "" | gzip > "${TEST_TMPDIR}/test.sql.gz"
     mock_command "mysql" '
-        for arg in "$@"; do
-            if [[ "$arg" == *"USE"* ]]; then
-                exit 0
-            fi
-        done
+        cat >/dev/null
         exit 0
     '
     load_mysql_credentials
