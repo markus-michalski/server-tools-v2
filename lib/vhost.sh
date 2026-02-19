@@ -163,6 +163,61 @@ reload_apache() {
 }
 
 # =============================================================================
+# LOGROTATE - pure functions + operations
+# =============================================================================
+
+# Generate logrotate config for a domain (pure function)
+generate_logrotate_config() {
+    local domain="$1"
+    local log_dir="/var/www/${domain}/logs"
+
+    cat <<LOGROTATEEOF
+${log_dir}/*.log {
+    weekly
+    missingok
+    rotate ${ST_LOGROTATE_ROTATE}
+    maxage ${ST_LOGROTATE_DAYS}
+    compress
+    delaycompress
+    notifempty
+    create 640 www-data www-data
+    sharedscripts
+    postrotate
+        if [ -f /var/run/apache2/apache2.pid ]; then
+            systemctl reload apache2 > /dev/null 2>&1 || true
+        fi
+    endscript
+}
+LOGROTATEEOF
+}
+
+# Setup logrotate for a domain
+setup_logrotate() {
+    local domain="$1"
+
+    validate_input "$domain" "domain" || return 1
+
+    local config
+    config=$(generate_logrotate_config "$domain")
+    safe_write_file "/etc/logrotate.d/vhost-${domain}" "$config" 644
+
+    audit_log "INFO" "Logrotate: created config for $domain"
+    log_info "Logrotate configured for $domain"
+}
+
+# Remove logrotate config for a domain
+remove_logrotate() {
+    local domain="$1"
+    local config_file="/etc/logrotate.d/vhost-${domain}"
+
+    if [[ -f "$config_file" ]]; then
+        rm -f "$config_file"
+        audit_log "INFO" "Logrotate: removed config for $domain"
+        log_info "Logrotate config removed for $domain"
+    fi
+}
+
+# =============================================================================
 # HIGH-LEVEL OPERATIONS
 # =============================================================================
 
@@ -216,6 +271,9 @@ create_vhost() {
     mkdir -p "$docroot" "/var/www/${domain}/logs"
     chown www-data:www-data "$docroot" "/var/www/${domain}/logs"
     chmod 755 "$docroot"
+
+    # Setup logrotate for domain logs
+    setup_logrotate "$domain"
 
     # Create welcome page
     if [[ "$no_welcome" != "true" ]]; then
@@ -280,6 +338,9 @@ delete_vhost() {
     # Remove config files
     rm -f "/etc/apache2/sites-available/${domain}.conf"
     rm -f "/etc/apache2/sites-available/${domain}-le-ssl.conf"
+
+    # Remove logrotate config
+    remove_logrotate "$domain"
 
     # Optionally remove DocumentRoot
     if [[ -n "$docroot" ]] && [[ -d "$(dirname "$docroot")" ]]; then
