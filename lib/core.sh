@@ -5,8 +5,15 @@
 [[ -n "${_CORE_SOURCED:-}" ]] && return
 _CORE_SOURCED=1
 
-# Version
-export ST_VERSION="2.0.0"
+# Version: from install marker, git tag, or fallback
+if [[ -f "${BASH_SOURCE%/*}/.version" ]]; then
+    ST_VERSION=$(cat "${BASH_SOURCE%/*}/.version")
+elif command -v git >/dev/null 2>&1; then
+    ST_VERSION=$(git -C "${BASH_SOURCE%/*}" describe --tags --always 2>/dev/null || echo "dev")
+else
+    ST_VERSION="dev"
+fi
+export ST_VERSION
 
 # Color support (respects NO_COLOR: https://no-color.org/)
 if [[ -t 2 ]] && [[ -z "${NO_COLOR:-}" ]]; then
