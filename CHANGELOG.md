@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Nothing yet
+
+### Changed
+- Nothing yet
+
+### Deprecated
+- Nothing yet
+
+### Removed
+- Nothing yet
+
+### Fixed
+- Nothing yet
+
+### Security
+- Nothing yet
+
+## [2.1.2] - 2026-02-19
+
+### Changed
+- clean up changelog by removing empty sections and updating unreleased version
+
+### Fixed
+- allow hyphens in database names and usernames
+- prevent sed from mangling its own line during install
 ## [2.1.1] - 2026-02-19
 
 ### Changed
@@ -66,7 +92,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Interactive menu system
 - Single-file architecture
 
-[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.1.2...HEAD
 [2.0.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.0.0
 [2.1.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.0
 [2.1.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.1
+[2.1.2]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.2
