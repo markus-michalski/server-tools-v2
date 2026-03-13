@@ -329,6 +329,16 @@ teardown() {
     assert_output --partial "Invalid URL"
 }
 
+@test "validate_input accepts URL with port" {
+    run validate_input "http://localhost:3000" "url"
+    assert_success
+}
+
+@test "validate_input accepts URL with port and path" {
+    run validate_input "http://localhost:8080/api" "url"
+    assert_success
+}
+
 @test "validate_input rejects ftp URL" {
     run validate_input "ftp://example.com" "url"
     assert_failure

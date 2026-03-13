@@ -121,8 +121,8 @@ validate_input() {
             done
             ;;
         url)
-            # Basic URL validation for redirects
-            if [[ ! "$input" =~ ^https?://[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(/.*)?$ ]]; then
+            # Basic URL validation for redirects and proxy backends
+            if [[ ! "$input" =~ ^https?://[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?(:[0-9]{1,5})?(/.*)?$ ]]; then
                 log_error "Invalid URL: $input"
                 return 1
             fi
