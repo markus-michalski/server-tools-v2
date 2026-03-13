@@ -61,6 +61,9 @@ ST_AUDIT_LOGGING="${ST_AUDIT_LOGGING:-true}"
 # SSH User Management
 ST_USER_DEFAULT_SHELL="${ST_USER_DEFAULT_SHELL:-/bin/bash}"
 
+# Reverse Proxy Defaults
+ST_PROXY_PRESERVE_HOST="${ST_PROXY_PRESERVE_HOST:-true}"
+
 # --- Functions ---
 
 # Load configuration from file

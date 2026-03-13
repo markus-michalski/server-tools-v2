@@ -95,6 +95,83 @@ generate_vhost_config() {
 VHOSTEOF
 }
 
+# Generate Apache reverse proxy configuration string (pure function, no side effects)
+generate_proxy_config() {
+    local domain="$1"
+    local aliases="${2:-}"
+    local backend_url="$3"
+    local websocket="${4:-false}"
+    local preserve_host="${5:-$ST_PROXY_PRESERVE_HOST}"
+
+    local preserve_host_value="On"
+    [[ "$preserve_host" == "false" ]] && preserve_host_value="Off"
+
+    cat <<PROXYEOF
+<VirtualHost *:80>
+    ServerName ${domain}
+    ${aliases:+ServerAlias ${aliases}}
+    ServerAdmin ${ST_APACHE_SERVER_ADMIN}
+
+    ProxyPreserveHost ${preserve_host_value}
+    ProxyPass / ${backend_url}/
+    ProxyPassReverse / ${backend_url}/
+PROXYEOF
+
+    if [[ "$websocket" == "true" ]]; then
+        cat <<WSEOF
+
+    # WebSocket proxy support
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} websocket [NC]
+    RewriteCond %{HTTP:Connection} upgrade [NC]
+    RewriteRule ^/?(.*) ws://${backend_url#http://}/$1 [P,L]
+WSEOF
+    fi
+
+    cat <<PROXYEOF2
+
+    # Security Headers
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+    ServerSignature Off
+
+    ErrorLog /var/www/${domain}/logs/error.log
+    CustomLog /var/www/${domain}/logs/access.log combined
+</VirtualHost>
+PROXYEOF2
+}
+
+# Detect vhost type from config (php or proxy)
+get_vhost_type() {
+    local domain="$1"
+    local config="/etc/apache2/sites-available/${domain}.conf"
+
+    if [[ ! -f "$config" ]]; then
+        return 1
+    fi
+
+    if grep -q "ProxyPass " "$config" 2>/dev/null; then
+        echo "proxy"
+    else
+        echo "php"
+    fi
+}
+
+# Extract backend URL from a proxy vhost config
+get_vhost_backend() {
+    local domain="$1"
+    local config="/etc/apache2/sites-available/${domain}.conf"
+
+    if [[ ! -f "$config" ]]; then
+        return 1
+    fi
+
+    grep -oP '^\s*ProxyPass\s+/\s+\K\S+' "$config" | head -n1 | sed 's|/$||'
+}
+
 # Generate welcome page content (pure function)
 generate_welcome_page() {
     local domain="$1"
@@ -221,17 +298,20 @@ remove_logrotate() {
 # HIGH-LEVEL OPERATIONS
 # =============================================================================
 
-# Create a complete virtual host
+# Create a complete virtual host (PHP-FPM or Reverse Proxy)
 create_vhost() {
     local domain="$1"
     local aliases="${2:-}"
     local php_version="${3:-$ST_DEFAULT_PHP_VERSION}"
     local custom_docroot="${4:-}"
     local no_welcome="${5:-false}"
+    local vhost_type="${6:-php}"
+    local backend_url="${7:-}"
+    local websocket="${8:-false}"
+    local preserve_host="${9:-$ST_PROXY_PRESERVE_HOST}"
 
     # Validate inputs
     validate_input "$domain" "domain" || return 1
-    validate_input "$php_version" "php_version" || return 1
 
     # Validate aliases
     if [[ -n "$aliases" ]]; then
@@ -241,20 +321,22 @@ create_vhost() {
         done
     fi
 
-    # Check PHP-FPM socket
-    if [[ ! -S "/run/php/php${php_version}-fpm.sock" ]]; then
-        log_error "PHP ${php_version} FPM is not installed or not running"
-        log_info "Installed PHP versions: $(detect_php_versions)"
-        return 1
-    fi
-
-    # Determine document root
-    local docroot
-    if [[ -z "$custom_docroot" ]]; then
-        docroot="/var/www/${domain}/html"
+    # Type-specific validation
+    if [[ "$vhost_type" == "proxy" ]]; then
+        if [[ -z "$backend_url" ]]; then
+            log_error "Backend URL is required for proxy vhosts (--backend)"
+            return 1
+        fi
+        validate_input "$backend_url" "url" || return 1
     else
-        validate_input "$custom_docroot" "path" || return 1
-        docroot="$custom_docroot"
+        validate_input "$php_version" "php_version" || return 1
+
+        # Check PHP-FPM socket
+        if [[ ! -S "/run/php/php${php_version}-fpm.sock" ]]; then
+            log_error "PHP ${php_version} FPM is not installed or not running"
+            log_info "Installed PHP versions: $(detect_php_versions)"
+            return 1
+        fi
     fi
 
     # Check for existing vhost
@@ -263,33 +345,71 @@ create_vhost() {
         confirm "Overwrite existing configuration?" || return 1
     fi
 
-    log_info "Creating virtual host for $domain..."
-    echo "  DocumentRoot: $docroot"
-    echo "  PHP version:  $php_version"
+    # Proxy mode: no DocumentRoot needed, only logs directory
+    if [[ "$vhost_type" == "proxy" ]]; then
+        log_info "Creating reverse proxy vhost for $domain..."
+        echo "  Type:     reverse proxy"
+        echo "  Backend:  $backend_url"
+        echo "  WebSocket: $websocket"
 
-    # Create directory structure
-    mkdir -p "$docroot" "/var/www/${domain}/logs"
-    chown www-data:www-data "$docroot" "/var/www/${domain}/logs"
-    chmod 755 "$docroot"
+        # Only create logs directory
+        mkdir -p "/var/www/${domain}/logs"
+        chown www-data:www-data "/var/www/${domain}/logs"
 
-    # Setup logrotate for domain logs
-    setup_logrotate "$domain"
+        # Setup logrotate for domain logs
+        setup_logrotate "$domain"
 
-    # Create welcome page
-    if [[ "$no_welcome" != "true" ]]; then
-        generate_welcome_page "$domain" >"${docroot}/index.php"
-        chown www-data:www-data "${docroot}/index.php"
-        chmod 644 "${docroot}/index.php"
+        # Write proxy vhost config
+        local config
+        config=$(generate_proxy_config "$domain" "$aliases" "$backend_url" "$websocket" "$preserve_host")
+        safe_write_file "/etc/apache2/sites-available/${domain}.conf" "$config" 640
+
+        # Enable required Apache modules
+        a2enmod headers 2>/dev/null || true
+        a2enmod proxy 2>/dev/null || true
+        a2enmod proxy_http 2>/dev/null || true
+        if [[ "$websocket" == "true" ]]; then
+            a2enmod proxy_wstunnel 2>/dev/null || true
+            a2enmod rewrite 2>/dev/null || true
+        fi
+    else
+        # Determine document root
+        local docroot
+        if [[ -z "$custom_docroot" ]]; then
+            docroot="/var/www/${domain}/html"
+        else
+            validate_input "$custom_docroot" "path" || return 1
+            docroot="$custom_docroot"
+        fi
+
+        log_info "Creating virtual host for $domain..."
+        echo "  DocumentRoot: $docroot"
+        echo "  PHP version:  $php_version"
+
+        # Create directory structure
+        mkdir -p "$docroot" "/var/www/${domain}/logs"
+        chown www-data:www-data "$docroot" "/var/www/${domain}/logs"
+        chmod 755 "$docroot"
+
+        # Setup logrotate for domain logs
+        setup_logrotate "$domain"
+
+        # Create welcome page
+        if [[ "$no_welcome" != "true" ]]; then
+            generate_welcome_page "$domain" >"${docroot}/index.php"
+            chown www-data:www-data "${docroot}/index.php"
+            chmod 644 "${docroot}/index.php"
+        fi
+
+        # Write vhost config
+        local config
+        config=$(generate_vhost_config "$domain" "$aliases" "$php_version" "$docroot")
+        safe_write_file "/etc/apache2/sites-available/${domain}.conf" "$config" 640
+
+        # Enable required Apache modules
+        a2enmod headers 2>/dev/null || true
+        a2enmod proxy_fcgi 2>/dev/null || true
     fi
-
-    # Write vhost config
-    local config
-    config=$(generate_vhost_config "$domain" "$aliases" "$php_version" "$docroot")
-    safe_write_file "/etc/apache2/sites-available/${domain}.conf" "$config" 640
-
-    # Enable required Apache modules
-    a2enmod headers 2>/dev/null || true
-    a2enmod proxy_fcgi 2>/dev/null || true
 
     # Enable site
     enable_site "$domain" || return 1
@@ -301,8 +421,13 @@ create_vhost() {
         return 1
     fi
 
-    audit_log "INFO" "Created virtual host: $domain (PHP $php_version)"
-    log_info "Virtual host '$domain' created successfully"
+    if [[ "$vhost_type" == "proxy" ]]; then
+        audit_log "INFO" "Created proxy vhost: $domain -> $backend_url"
+        log_info "Proxy vhost '$domain' -> '$backend_url' created successfully"
+    else
+        audit_log "INFO" "Created virtual host: $domain (PHP $php_version)"
+        log_info "Virtual host '$domain' created successfully"
+    fi
 }
 
 # Delete a virtual host
@@ -460,13 +585,30 @@ show_vhost_info() {
 
     print_header "Virtual Host: $domain"
 
-    local docroot php_version
-    docroot=$(get_vhost_docroot "$domain")
-    php_version=$(get_vhost_php_version "$domain")
+    local vtype
+    vtype=$(get_vhost_type "$domain")
 
     echo "  Domain:       $domain"
-    echo "  DocumentRoot: ${docroot:-unknown}"
-    echo "  PHP version:  ${php_version:-unknown}"
+    echo "  Type:         ${vtype:-unknown}"
+
+    if [[ "$vtype" == "proxy" ]]; then
+        local backend
+        backend=$(get_vhost_backend "$domain")
+        echo "  Backend:      ${backend:-unknown}"
+
+        # Check for WebSocket support
+        if grep -q "proxy_wstunnel\|ws://" "/etc/apache2/sites-available/${domain}.conf" 2>/dev/null; then
+            echo "  WebSocket:    enabled"
+        else
+            echo "  WebSocket:    disabled"
+        fi
+    else
+        local docroot php_version
+        docroot=$(get_vhost_docroot "$domain")
+        php_version=$(get_vhost_php_version "$domain")
+        echo "  DocumentRoot: ${docroot:-unknown}"
+        echo "  PHP version:  ${php_version:-unknown}"
+    fi
 
     # Check if SSL is configured
     if [[ -f "/etc/apache2/sites-available/${domain}-le-ssl.conf" ]]; then

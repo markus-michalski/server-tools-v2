@@ -269,3 +269,136 @@ teardown() {
     assert_success
     assert_output --partial "create 640 www-data www-data"
 }
+
+# =============================================================================
+# REVERSE PROXY
+# =============================================================================
+
+@test "generate_proxy_config includes ServerName" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ServerName app.example.com"
+}
+
+@test "generate_proxy_config includes ProxyPass directives" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ProxyPass / http://localhost:3000/"
+    assert_output --partial "ProxyPassReverse / http://localhost:3000/"
+}
+
+@test "generate_proxy_config includes ProxyPreserveHost On" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ProxyPreserveHost On"
+}
+
+@test "generate_proxy_config supports ProxyPreserveHost Off" {
+    export ST_PROXY_PRESERVE_HOST=false
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "false"
+    assert_success
+    assert_output --partial "ProxyPreserveHost Off"
+}
+
+@test "generate_proxy_config includes ServerAlias when provided" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "www.app.example.com" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ServerAlias www.app.example.com"
+}
+
+@test "generate_proxy_config omits ServerAlias when empty" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    refute_output --partial "ServerAlias"
+}
+
+@test "generate_proxy_config includes security headers" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "X-Content-Type-Options"
+    assert_output --partial "X-Frame-Options"
+    assert_output --partial "Referrer-Policy"
+    assert_output --partial "Permissions-Policy"
+}
+
+@test "generate_proxy_config includes logging paths" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ErrorLog /var/www/app.example.com/logs/error.log"
+    assert_output --partial "CustomLog /var/www/app.example.com/logs/access.log"
+}
+
+@test "generate_proxy_config does not include DocumentRoot" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    refute_output --partial "DocumentRoot"
+}
+
+@test "generate_proxy_config does not include PHP-FPM" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    refute_output --partial "php"
+    refute_output --partial "fpm"
+}
+
+@test "generate_proxy_config includes WebSocket rules when enabled" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true"
+    assert_success
+    assert_output --partial "RewriteEngine On"
+    assert_output --partial "HTTP:Upgrade"
+    assert_output --partial "ws://localhost:3000"
+}
+
+@test "generate_proxy_config omits WebSocket rules when disabled" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    refute_output --partial "ws://"
+    refute_output --partial "HTTP:Upgrade"
+}
+
+@test "generate_proxy_config includes VirtualHost block" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "<VirtualHost *:80>"
+    assert_output --partial "</VirtualHost>"
+}
+
+@test "generate_proxy_config uses configurable ServerAdmin" {
+    export ST_PROXY_PRESERVE_HOST=true
+    ST_APACHE_SERVER_ADMIN="admin@myserver.com"
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial "ServerAdmin admin@myserver.com"
+}
+
+# --- Proxy input validation ---
+
+@test "create_vhost proxy mode rejects missing backend URL" {
+    run create_vhost "app.example.com" "" "" "" "false" "proxy" "" "false" "true"
+    assert_failure
+    assert_output --partial "Backend URL is required"
+}
+
+@test "create_vhost proxy mode rejects invalid backend URL" {
+    run create_vhost "app.example.com" "" "" "" "false" "proxy" "not-a-url" "false" "true"
+    assert_failure
+    assert_output --partial "Invalid URL"
+}
+
+@test "create_vhost proxy mode rejects invalid domain" {
+    run create_vhost "bad domain" "" "" "" "false" "proxy" "http://localhost:3000" "false" "true"
+    assert_failure
+    assert_output --partial "Invalid domain"
+}
