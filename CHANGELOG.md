@@ -24,6 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 - Nothing yet
 
+## [2.3.0] - 2026-03-13
+
+### Added
+- add reverse proxy mode for vhost creation
+
+### Fixed
+- allow port numbers in URL validation
+
 ## [2.2.0] - 2026-02-19
 
 ### Added
@@ -34,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - export global flags to silence ShellCheck SC2034
+
 ## [2.1.2] - 2026-02-19
 
 ### Changed
@@ -42,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - allow hyphens in database names and usernames
 - prevent sed from mangling its own line during install
+
 ## [2.1.1] - 2026-02-19
 
 ### Changed
@@ -49,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - use tag -l instead of describe for checkout command
+
 ## [2.1.0] - 2026-02-19
 
 ### Changed
@@ -62,10 +73,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 - fix audit findings from comprehensive code review
 - harden credential handling, config sourcing, and input validation
+
 ## [2.0.0] - 2026-02-18
 
 ### Added
-
 - Modular architecture with composable building blocks pattern
 - Input validation for all user inputs (domains, database names, paths, emails)
 - Audit logging for all administrative actions
@@ -82,7 +93,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MIT License
 
 ### Changed
-
 - Complete rewrite from single-file monolith to modular multi-file architecture
 - All UI text translated to English
 - Configuration variables use `ST_` prefix
@@ -90,21 +100,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Database menu now includes "create for existing user" and "assign to user" operations
 
 ### Removed
-
 - German UI text
 - Emoji in menu headers (replaced with clean ASCII)
 
 ## [1.0.0] - 2025-01-01
 
 ### Added
-
 - Initial release with database, vhost, SSL, and cron management
 - Interactive menu system
 - Single-file architecture
 
-[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.3.0...HEAD
 [2.0.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.0.0
 [2.1.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.0
 [2.1.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.1
 [2.1.2]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.2
 [2.2.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.2.0
+[2.3.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.3.0
