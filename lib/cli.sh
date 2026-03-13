@@ -273,7 +273,8 @@ cli_vhost() {
 
     case "$action" in
         create)
-            local domain="" php="" aliases="" docroot=""
+            local domain="" php="" aliases="" docroot="" vhost_type="php"
+            local backend="" websocket="false" preserve_host="$ST_PROXY_PRESERVE_HOST"
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --domain)
@@ -292,11 +293,30 @@ cli_vhost() {
                         docroot="$2"
                         shift 2
                         ;;
+                    --type)
+                        vhost_type="$2"
+                        shift 2
+                        ;;
+                    --backend)
+                        backend="$2"
+                        shift 2
+                        ;;
+                    --websocket)
+                        websocket="true"
+                        shift
+                        ;;
+                    --preserve-host)
+                        preserve_host="$2"
+                        shift 2
+                        ;;
                     *) shift ;;
                 esac
             done
-            [[ -z "$domain" ]] && cli_usage "vhost create" "--domain <domain> [--php <version>] [--aliases <aliases>]"
-            create_vhost "$domain" "$aliases" "${php:-$ST_DEFAULT_PHP_VERSION}" "$docroot"
+            [[ -z "$domain" ]] && cli_usage "vhost create" "--domain <domain> [--type php|proxy] [--php <version>] [--backend <url>] [--websocket] [--preserve-host on|off]"
+            if [[ "$vhost_type" != "php" ]] && [[ "$vhost_type" != "proxy" ]]; then
+                die "Invalid vhost type: $vhost_type (must be php or proxy)"
+            fi
+            create_vhost "$domain" "$aliases" "${php:-$ST_DEFAULT_PHP_VERSION}" "$docroot" "false" "$vhost_type" "$backend" "$websocket" "$preserve_host"
             ;;
         delete)
             local domain=""
@@ -374,12 +394,22 @@ cli_vhost() {
 Usage: server-tools vhost <action> [options]
 
 Actions:
-  create    Create virtual host
+  create    Create virtual host (PHP-FPM or Reverse Proxy)
   delete    Delete virtual host
   list      List virtual hosts
   php       Change PHP version
   info      Show vhost details
   redirect  Create domain redirect
+
+Create options:
+  --domain <domain>         Domain name (required)
+  --type php|proxy          VHost type (default: php)
+  --php <version>           PHP version (for type=php)
+  --backend <url>           Backend URL (for type=proxy, required)
+  --websocket               Enable WebSocket proxy support
+  --preserve-host on|off    ProxyPreserveHost (default: on)
+  --aliases <aliases>       Space-separated server aliases
+  --docroot <path>          Custom DocumentRoot (for type=php)
 
 Run 'server-tools vhost <action> --help' for details.
 EOF

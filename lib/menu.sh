@@ -223,7 +223,8 @@ vhost_menu() {
 
     while $submenu; do
         show_menu "Virtual Host Management" \
-            "Create virtual host" \
+            "Create PHP virtual host" \
+            "Create reverse proxy vhost" \
             "Delete virtual host" \
             "List virtual hosts" \
             "Change PHP version" \
@@ -252,6 +253,17 @@ vhost_menu() {
                 press_enter
                 ;;
             2)
+                local domain aliases backend_url ws_choice websocket
+                read -r -p "Domain: " domain
+                read -r -p "Aliases (space-separated, empty for none): " aliases
+                read -r -p "Backend URL (e.g. http://localhost:3000): " backend_url
+                read -r -p "Enable WebSocket support? (y/N): " ws_choice
+                websocket="false"
+                [[ "$ws_choice" =~ ^[yY] ]] && websocket="true"
+                create_vhost "$domain" "$aliases" "" "" "false" "proxy" "$backend_url" "$websocket" || true
+                press_enter
+                ;;
+            3)
                 local domain
                 list_vhosts || true
                 echo ""
@@ -259,11 +271,11 @@ vhost_menu() {
                 delete_vhost "$domain" || true
                 press_enter
                 ;;
-            3)
+            4)
                 list_vhosts || true
                 press_enter
                 ;;
-            4)
+            5)
                 local available_php domain php_version
                 list_vhosts || true
                 echo ""
@@ -279,13 +291,13 @@ vhost_menu() {
                 change_php_version "$domain" "$php_version" || true
                 press_enter
                 ;;
-            5)
+            6)
                 local domain
                 read -r -p "Domain: " domain
                 show_vhost_info "$domain" || true
                 press_enter
                 ;;
-            6)
+            7)
                 local source_domain target_url code
                 read -r -p "Source domain: " source_domain
                 read -r -p "Target URL (e.g. https://new-domain.com/): " target_url
@@ -293,7 +305,7 @@ vhost_menu() {
                 create_redirect "$source_domain" "$target_url" "${code:-301}" || true
                 press_enter
                 ;;
-            7)
+            8)
                 local domain direction dir
                 read -r -p "Domain: " domain
                 echo "  1. Redirect non-www to www"
@@ -304,13 +316,13 @@ vhost_menu() {
                 add_www_redirect "$domain" "$dir" || true
                 press_enter
                 ;;
-            8)
+            9)
                 local domain
                 read -r -p "Domain: " domain
                 force_https "$domain" || true
                 press_enter
                 ;;
-            9)
+            10)
                 submenu=false
                 ;;
             *)
