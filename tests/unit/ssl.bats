@@ -194,3 +194,173 @@ teardown() {
     assert_failure
     assert_output --partial "credentials file not found"
 }
+
+# --- fix_ssl_proxy_config ---
+
+@test "fix_ssl_proxy_config replaces https://localhost with http:// in ProxyPass" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ServerName app.example.com
+    ProxyPass / https://localhost:3000/
+    ProxyPassReverse / https://localhost:3000/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run grep "ProxyPass / " "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "http://localhost:3000/"
+    refute_output --partial "https://localhost:3000/"
+}
+
+@test "fix_ssl_proxy_config replaces https://localhost in ProxyPassReverse" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ProxyPass / https://localhost:8080/
+    ProxyPassReverse / https://localhost:8080/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run grep "ProxyPassReverse" "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "http://localhost:8080/"
+    refute_output --partial "https://localhost:8080/"
+}
+
+@test "fix_ssl_proxy_config does not change https:// for non-localhost backends" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ProxyPass / https://upstream.internal:3000/
+    ProxyPassReverse / https://upstream.internal:3000/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run cat "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "https://upstream.internal:3000/"
+}
+
+@test "fix_ssl_proxy_config fixes https://[::1] IPv6 loopback backend" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ProxyPass / https://[::1]:9000/
+    ProxyPassReverse / https://[::1]:9000/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run cat "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "http://[::1]:9000/"
+    refute_output --partial "https://[::1]:9000/"
+}
+
+@test "fix_ssl_proxy_config warns and returns failure when sed fails" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    printf '    ProxyPass / https://localhost:3000/\n' > "${sites_dir}/app.example.com-le-ssl.conf"
+    mock_command "sed" "exit 1"
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_failure
+    assert_output --partial "Could not fix proxy passthrough"
+}
+
+@test "fix_ssl_proxy_config is a no-op when SSL config does not exist" {
+    export ST_APACHE_SITES_AVAILABLE="${TEST_TMPDIR}/sites-available"
+    run fix_ssl_proxy_config "nonexistent.example.com"
+    assert_success
+}
+
+@test "fix_ssl_proxy_config fixes https://localhost/ without port" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ProxyPass / https://localhost/
+    ProxyPassReverse / https://localhost/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run cat "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "http://localhost/"
+    refute_output --partial "https://localhost/"
+}
+
+@test "fix_ssl_proxy_config fixes https://127.0.0.1 loopback backend" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    ProxyPass / https://127.0.0.1:8080/
+    ProxyPassReverse / https://127.0.0.1:8080/
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+    run cat "${sites_dir}/app.example.com-le-ssl.conf"
+    assert_output --partial "http://127.0.0.1:8080/"
+    refute_output --partial "https://127.0.0.1:8080/"
+}
+
+@test "fix_ssl_proxy_config is a no-op when config has no ProxyPass" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+    cat > "${sites_dir}/app.example.com-le-ssl.conf" <<'EOF'
+<VirtualHost *:443>
+    DocumentRoot /var/www/app.example.com/public
+</VirtualHost>
+EOF
+
+    run fix_ssl_proxy_config "app.example.com"
+    assert_success
+}
+
+@test "setup_ssl fixes https://localhost in SSL vhost after certbot for proxy vhosts" {
+    local sites_dir="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$sites_dir"
+    export ST_APACHE_SITES_AVAILABLE="$sites_dir"
+
+    vhost_exists() { return 0; }
+    mock_command "systemctl" 'exit 0'
+    mock_command "apache2ctl" 'exit 0'
+    # Simulate certbot creating SSL conf with wrong https://localhost (the bug)
+    mock_command "certbot" "
+        mkdir -p '${sites_dir}'
+        cat > '${sites_dir}/example.com-le-ssl.conf' <<'CERTBOT_EOF'
+<VirtualHost *:443>
+    ServerName example.com
+    ProxyPass / https://localhost:3000/
+    ProxyPassReverse / https://localhost:3000/
+</VirtualHost>
+CERTBOT_EOF
+        exit 0
+    "
+
+    run setup_ssl "example.com"
+    assert_success
+    run grep "ProxyPass / " "${sites_dir}/example.com-le-ssl.conf"
+    assert_output --partial "http://localhost:3000/"
+    refute_output --partial "https://localhost:3000/"
+}

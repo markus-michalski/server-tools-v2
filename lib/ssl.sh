@@ -62,6 +62,26 @@ get_cert_expiry() {
     openssl x509 -in "$cert" -noout -enddate 2>/dev/null | cut -d= -f2
 }
 
+# Fix SSL vhost config: certbot --apache rewrites http://localhost to https://localhost
+# in ProxyPass/ProxyPassReverse lines. Internal backends always use plain HTTP —
+# SSL terminates at Apache, not at the backend service.
+# Covers: localhost, 127.0.0.1, [::1] — with or without explicit port.
+fix_ssl_proxy_config() {
+    local domain="$1"
+    local apache_sites="${ST_APACHE_SITES_AVAILABLE:-/etc/apache2/sites-available}"
+    local ssl_conf="${apache_sites}/${domain}-le-ssl.conf"
+
+    [[ -f "$ssl_conf" ]] || return 0
+    grep -q "ProxyPass" "$ssl_conf" || return 0
+
+    if ! sed -i -E 's#(ProxyPass(Reverse)?[[:space:]]+[^[:space:]]+[[:space:]]+)https://(localhost|127\.0\.0\.1|\[::1\])([:/])#\1http://\3\4#g' "$ssl_conf"; then
+        log_warn "Could not fix proxy passthrough in SSL config: ${ssl_conf}"
+        return 1
+    fi
+
+    log_info "Fixed SSL vhost proxy passthrough for $domain (http:// restored for localhost)"
+}
+
 # =============================================================================
 # HIGH-LEVEL OPERATIONS
 # =============================================================================
@@ -101,6 +121,7 @@ setup_ssl() {
     echo "  Email: $email"
 
     if certbot --apache -d "$domain" --non-interactive --agree-tos --email "$email" 2>&1; then
+        fix_ssl_proxy_config "$domain" || log_warn "Failed to fix proxy passthrough in SSL vhost for $domain"
         reload_apache || log_warn "Apache reload failed"
         audit_log "INFO" "Created SSL certificate for $domain"
         log_info "SSL certificate created for '$domain'"
