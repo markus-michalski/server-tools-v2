@@ -98,8 +98,8 @@ check_dependencies() {
 
 # Returns 0 if mysql/mariadb client and dump tool are available on this host
 mysql_available() {
-    (command_exists mysql || command_exists mariadb) &&
-        (command_exists mysqldump || command_exists mariadb-dump)
+    (command_exists mysql || command_exists mariadb) \
+        && (command_exists mysqldump || command_exists mariadb-dump)
 }
 
 # Returns the mysql client binary name (mysql preferred, mariadb as fallback)
