@@ -59,6 +59,13 @@ press_enter() {
 # =============================================================================
 
 database_menu() {
+    if ! mysql_available; then
+        echo ""
+        log_warn "Database management is not available (mysql/mysqldump not installed)."
+        echo "  Install mariadb-client to enable this feature."
+        press_enter
+        return
+    fi
     if ! load_mysql_credentials; then
         log_error "Cannot connect to MySQL. Check /root/.my.cnf"
         press_enter
@@ -684,10 +691,12 @@ user_menu() {
 
 main_menu() {
     local running=true
+    local db_label="Database Management"
+    mysql_available || db_label="Database Management [mysql not installed]"
 
     while $running; do
         show_menu "Server Tools v${ST_VERSION}" \
-            "Database Management" \
+            "$db_label" \
             "Virtual Host Management" \
             "SSH User Management" \
             "SSL Certificate Management" \

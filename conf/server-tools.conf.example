@@ -47,6 +47,8 @@
 # --- MySQL ---
 
 # MySQL config file with root credentials
+# Database commands require mysql and mysqldump to be installed (mariadb-client).
+# If not installed, the database menu is disabled but all other features still work.
 #ST_MYSQL_CONFIG_FILE="/root/.my.cnf"
 
 # Default character set for new databases

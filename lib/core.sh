@@ -81,11 +81,11 @@ check_root() {
     fi
 }
 
-# Verify all required system commands are available
+# Verify all required system commands are available (MySQL excluded — see check_db_dependencies)
 check_dependencies() {
     local missing=()
 
-    for cmd in mysql mysqldump apache2ctl openssl gzip systemctl realpath; do
+    for cmd in apache2ctl openssl gzip systemctl realpath; do
         if ! command_exists "$cmd"; then
             missing+=("$cmd")
         fi
@@ -94,6 +94,22 @@ check_dependencies() {
     if [[ ${#missing[@]} -gt 0 ]]; then
         die "Missing required commands: ${missing[*]}"
     fi
+}
+
+# Returns 0 if mysql/mariadb client and dump tool are available on this host
+mysql_available() {
+    (command_exists mysql || command_exists mariadb) &&
+        (command_exists mysqldump || command_exists mariadb-dump)
+}
+
+# Returns the mysql client binary name (mysql preferred, mariadb as fallback)
+mysql_bin() {
+    command_exists mysql && echo "mysql" || echo "mariadb"
+}
+
+# Returns the mysqldump binary name (mysqldump preferred, mariadb-dump as fallback)
+mysqldump_bin() {
+    command_exists mysqldump && echo "mysqldump" || echo "mariadb-dump"
 }
 
 # --- User interaction ---
