@@ -230,6 +230,9 @@ case "${1:-}" in
         check_root
         load_config
         check_dependencies
+        if ! mysql_available; then
+            die "Database commands require a MySQL/MariaDB client (mysql or mariadb) and dump tool (mysqldump or mariadb-dump). Install with: apt-get install mariadb-client"
+        fi
         shift
         cli_database "$@"
         ;;

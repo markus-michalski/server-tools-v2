@@ -43,7 +43,7 @@ load_mysql_credentials() {
 
 # Test MySQL connectivity
 mysql_check_connection() {
-    if ! mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "SELECT 1" &>/dev/null; then
+    if ! "$(mysql_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "SELECT 1" &>/dev/null; then
         log_error "Cannot connect to MySQL. Check credentials in $ST_MYSQL_CONFIG_FILE"
         audit_log "ERROR" "MySQL connection failed"
         return 1
@@ -54,7 +54,7 @@ mysql_check_connection() {
 mysql_cmd() {
     local query="$1"
     mysql_check_connection || return 1
-    mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "$query" 2>&1
+    "$(mysql_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" -e "$query" 2>&1
 }
 
 # Check if a database exists
@@ -197,7 +197,7 @@ dump_database() {
     # Run pipeline in subshell to scope pipefail without eval
     if ! (
         set -o pipefail
-        mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+        "$(mysqldump_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
             "$db_name" 2>/dev/null | gzip >"$output_file"
     ); then
         rm -f "$output_file"
@@ -228,13 +228,13 @@ restore_dump() {
         set -o pipefail
         case "$dump_file" in
             *.sql.gz)
-                gunzip -c "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
+                gunzip -c "$dump_file" | "$(mysql_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
                 ;;
             *.sql.zip)
-                unzip -p "$dump_file" | mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
+                unzip -p "$dump_file" | "$(mysql_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" 2>&1
                 ;;
             *.sql)
-                mysql --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" <"$dump_file" 2>&1
+                "$(mysql_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" "$db_name" <"$dump_file" 2>&1
                 ;;
         esac
     ) || rc=$?
@@ -265,11 +265,11 @@ export_to_file() {
         set -o pipefail
         case "$output_file" in
             *.sql.gz)
-                mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                "$(mysqldump_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
                     "$db_name" 2>/dev/null | gzip >"$output_file"
                 ;;
             *.sql)
-                mysqldump --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
+                "$(mysqldump_bin)" --defaults-file="${ST_MYSQL_CONFIG_FILE}" --single-transaction --routines --triggers \
                     "$db_name" >"$output_file" 2>/dev/null
                 ;;
         esac

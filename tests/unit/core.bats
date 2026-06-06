@@ -92,3 +92,68 @@ teardown() {
     assert_success
     assert_output --partial "=== Test Section ==="
 }
+
+# --- mysql_available ---
+
+@test "mysql_available returns success when mysql and mysqldump exist" {
+    mock_command "mysql" 'exit 0'
+    mock_command "mysqldump" 'exit 0'
+    run mysql_available
+    assert_success
+}
+
+@test "mysql_available returns failure when mysql is missing" {
+    mock_command "mysqldump" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysql_available
+    assert_failure
+}
+
+@test "mysql_available returns failure when mysqldump is missing" {
+    mock_command "mysql" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysql_available
+    assert_failure
+}
+
+@test "mysql_available returns failure when neither is installed" {
+    PATH="${TEST_TMPDIR}/bin" run mysql_available
+    assert_failure
+}
+
+@test "mysql_available returns success when only mariadb and mariadb-dump exist" {
+    mock_command "mariadb" 'exit 0'
+    mock_command "mariadb-dump" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysql_available
+    assert_success
+}
+
+@test "mysql_available returns failure when mariadb exists but dump tool is missing" {
+    mock_command "mariadb" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysql_available
+    assert_failure
+}
+
+# --- mysql_bin / mysqldump_bin ---
+
+@test "mysql_bin returns mysql when mysql is available" {
+    mock_command "mysql" 'exit 0'
+    run mysql_bin
+    assert_output "mysql"
+}
+
+@test "mysql_bin returns mariadb when only mariadb is available" {
+    mock_command "mariadb" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysql_bin
+    assert_output "mariadb"
+}
+
+@test "mysqldump_bin returns mysqldump when mysqldump is available" {
+    mock_command "mysqldump" 'exit 0'
+    run mysqldump_bin
+    assert_output "mysqldump"
+}
+
+@test "mysqldump_bin returns mariadb-dump when only mariadb-dump is available" {
+    mock_command "mariadb-dump" 'exit 0'
+    PATH="${TEST_TMPDIR}/bin" run mysqldump_bin
+    assert_output "mariadb-dump"
+}
