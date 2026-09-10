@@ -29,6 +29,13 @@ teardown() {
 
 # --- Pure functions (no mocking needed) ---
 
+@test "generate_forwarded_headers_snippet uses ap_expr for scheme and port" {
+    run generate_forwarded_headers_snippet
+    assert_success
+    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
+    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
+}
+
 @test "generate_vhost_config includes ServerName" {
     run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
     assert_success
@@ -60,6 +67,13 @@ teardown() {
     assert_output --partial "X-Frame-Options"
     assert_output --partial "Referrer-Policy"
     assert_output --partial "Permissions-Policy"
+}
+
+@test "generate_vhost_config includes forwarded headers" {
+    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
+    assert_success
+    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
+    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
 }
 
 @test "generate_vhost_config includes DocumentRoot" {
@@ -325,6 +339,20 @@ teardown() {
     assert_output --partial "X-Frame-Options"
     assert_output --partial "Referrer-Policy"
     assert_output --partial "Permissions-Policy"
+}
+
+@test "generate_proxy_config includes forwarded headers" {
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
+    assert_success
+    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
+    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
+}
+
+@test "generate_proxy_config includes forwarded headers when WebSocket is enabled" {
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true"
+    assert_success
+    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
+    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
 }
 
 @test "generate_proxy_config includes logging paths" {

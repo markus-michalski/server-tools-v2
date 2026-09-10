@@ -57,6 +57,19 @@ get_vhost_php_version() {
     grep -oP 'php\K[0-9]+\.[0-9]+' "$config" | head -n1
 }
 
+# Generate the Forwarded-Proto/Port header snippet shared by both vhost templates.
+# Uses Apache's ap_expr (%{REQUEST_SCHEME}/%{SERVER_PORT}) instead of hardcoded
+# "https"/"443" literals so the value is correct on the plain port-80 vhost too --
+# certbot --apache copies this verbatim into the generated -le-ssl.conf, where the
+# same expression then correctly evaluates to https/443.
+generate_forwarded_headers_snippet() {
+    cat <<'FWDEOF'
+    # Forwarded Headers
+    RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+    RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}
+FWDEOF
+}
+
 # Generate Apache vhost configuration string (pure function, no side effects)
 generate_vhost_config() {
     local domain="$1"
@@ -86,6 +99,8 @@ generate_vhost_config() {
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+$(generate_forwarded_headers_snippet)
 
     ServerSignature Off
 
@@ -135,6 +150,8 @@ WSEOF
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+$(generate_forwarded_headers_snippet)
 
     ServerSignature Off
 
