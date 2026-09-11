@@ -1,8 +1,9 @@
 # ShellCheck configuration for server-tools
 
-# Allow sourcing from lib/ directory
+# Allow sourcing from lib/ directory (and its webserver/ subdirectory)
 external-sources=true
 source-path=lib
+source-path=lib/webserver
 
 # Target shell
 shell=bash

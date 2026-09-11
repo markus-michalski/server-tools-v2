@@ -48,16 +48,16 @@ test-verbose: setup-tests ## Run BATS tests with verbose output
 
 lint: ## Run ShellCheck on all scripts
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found. Install: apt install shellcheck"; exit 1; }
-	shellcheck --color=auto -x bin/server-tools lib/*.sh
+	shellcheck --color=auto -x bin/server-tools lib/*.sh lib/webserver/*.sh
 	@echo "ShellCheck passed"
 
 format: ## Format scripts with shfmt
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found. Install: go install mvdan.cc/sh/v3/cmd/shfmt@latest"; exit 1; }
-	shfmt -i 4 -bn -ci -w bin/server-tools lib/*.sh
+	shfmt -i 4 -bn -ci -w bin/server-tools lib/*.sh lib/webserver/*.sh
 
 format-check: ## Check formatting without changes
 	@command -v shfmt >/dev/null 2>&1 || { echo "shfmt not found. Install: go install mvdan.cc/sh/v3/cmd/shfmt@latest"; exit 1; }
-	shfmt -i 4 -bn -ci -d bin/server-tools lib/*.sh
+	shfmt -i 4 -bn -ci -d bin/server-tools lib/*.sh lib/webserver/*.sh
 	@echo "Format check passed"
 
 check: lint format-check test ## Run all checks (lint + format + test)

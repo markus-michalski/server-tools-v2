@@ -105,6 +105,9 @@ CONFIGEOF
     mkdir -p "$install_dir"
     cp "${LIB_DIR}"/*.sh "$install_dir/"
     chmod 644 "$install_dir"/*.sh
+    mkdir -p "$install_dir/webserver"
+    cp "${LIB_DIR}"/webserver/*.sh "$install_dir/webserver/"
+    chmod 644 "$install_dir"/webserver/*.sh
     echo "  Libraries installed: $install_dir"
 
     # Install main script

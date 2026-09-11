@@ -59,6 +59,18 @@ teardown() {
     assert_equal "$ST_BACKUP_RETENTION_DAYS" "30"
 }
 
+@test "validate_config resets an invalid ST_WEBSERVER value to apache" {
+    ST_WEBSERVER="httpd"
+    validate_config
+    assert_equal "$ST_WEBSERVER" "apache"
+}
+
+@test "validate_config accepts ST_WEBSERVER=nginx" {
+    ST_WEBSERVER="nginx"
+    validate_config
+    assert_equal "$ST_WEBSERVER" "nginx"
+}
+
 @test "validate_config accepts valid values" {
     ST_PASSWORD_LENGTH=20
     ST_PASSWORD_MIN_LENGTH=12

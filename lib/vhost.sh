@@ -1,8 +1,12 @@
 #!/bin/bash
-# VHost library: composable Apache virtual host management with PHP-FPM
+# VHost library: composable virtual host management (Apache or Nginx) with PHP-FPM
 #
-# Building blocks: pure functions for config generation, site management
-# High-level ops: create/delete/list/modify vhosts
+# This file is webserver-agnostic: input validation, directory creation,
+# confirmation prompts, rollback-on-failure, logrotate setup, and audit
+# logging all live here. Webserver-specific mechanics (config file syntax,
+# enabling/disabling sites, reload/config-test) live in lib/webserver/apache.sh
+# and lib/webserver/nginx.sh, selected at runtime via $ST_WEBSERVER and
+# dispatched through _ws_dispatch().
 
 [[ -n "${_VHOST_SOURCED:-}" ]] && return
 _VHOST_SOURCED=1
@@ -11,6 +15,21 @@ source "${BASH_SOURCE%/*}/core.sh"
 source "${BASH_SOURCE%/*}/config.sh"
 source "${BASH_SOURCE%/*}/security.sh"
 source "${BASH_SOURCE%/*}/backup.sh"
+source "${BASH_SOURCE%/*}/webserver/apache.sh"
+source "${BASH_SOURCE%/*}/webserver/nginx.sh"
+
+# Dispatch to the configured webserver backend's implementation of $1, called
+# with the remaining arguments. E.g. `_ws_dispatch generate_vhost_config "$domain" ...`
+# calls `apache_generate_vhost_config "$domain" ...` or `nginx_generate_vhost_config ...`
+# depending on $ST_WEBSERVER.
+_ws_dispatch() {
+    local fn="$1"
+    shift
+    case "${ST_WEBSERVER:-apache}" in
+        nginx) "nginx_${fn}" "$@" ;;
+        *) "apache_${fn}" "$@" ;;
+    esac
+}
 
 # =============================================================================
 # BUILDING BLOCKS
@@ -25,168 +44,6 @@ detect_php_versions() {
         fi
     done
     echo "${versions[*]}"
-}
-
-# Check if a vhost config exists
-vhost_exists() {
-    local domain="$1"
-    [[ -f "/etc/apache2/sites-available/${domain}.conf" ]]
-}
-
-# Extract DocumentRoot from a vhost config
-get_vhost_docroot() {
-    local domain="$1"
-    local config="/etc/apache2/sites-available/${domain}.conf"
-
-    if [[ ! -f "$config" ]]; then
-        return 1
-    fi
-
-    grep -i "^[[:space:]]*DocumentRoot" "$config" | head -n1 | awk '{print $2}'
-}
-
-# Extract PHP version from a vhost config
-get_vhost_php_version() {
-    local domain="$1"
-    local config="/etc/apache2/sites-available/${domain}.conf"
-
-    if [[ ! -f "$config" ]]; then
-        return 1
-    fi
-
-    grep -oP 'php\K[0-9]+\.[0-9]+' "$config" | head -n1
-}
-
-# Generate the Forwarded-Proto/Port header snippet shared by both vhost templates.
-# Uses Apache's ap_expr (%{REQUEST_SCHEME}/%{SERVER_PORT}) instead of hardcoded
-# "https"/"443" literals so the value is correct on the plain port-80 vhost too --
-# certbot --apache copies this verbatim into the generated -le-ssl.conf, where the
-# same expression then correctly evaluates to https/443.
-generate_forwarded_headers_snippet() {
-    cat <<'FWDEOF'
-    # Forwarded Headers
-    RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
-    RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}
-FWDEOF
-}
-
-# Generate Apache vhost configuration string (pure function, no side effects)
-generate_vhost_config() {
-    local domain="$1"
-    local aliases="${2:-}"
-    local php_version="$3"
-    local docroot="$4"
-
-    cat <<VHOSTEOF
-<VirtualHost *:80>
-    ServerName ${domain}
-    ${aliases:+ServerAlias ${aliases}}
-    ServerAdmin ${ST_APACHE_SERVER_ADMIN}
-    DocumentRoot ${docroot}
-
-    <Directory ${docroot}>
-        Options -Indexes +FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-
-    <FilesMatch \.php$>
-        SetHandler "proxy:unix:/run/php/php${php_version}-fpm.sock|fcgi://localhost"
-    </FilesMatch>
-
-    # Security Headers
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-
-$(generate_forwarded_headers_snippet)
-
-    ServerSignature Off
-
-    ErrorLog /var/www/${domain}/logs/error.log
-    CustomLog /var/www/${domain}/logs/access.log combined
-</VirtualHost>
-VHOSTEOF
-}
-
-# Generate Apache reverse proxy configuration string (pure function, no side effects)
-generate_proxy_config() {
-    local domain="$1"
-    local aliases="${2:-}"
-    local backend_url="$3"
-    local websocket="${4:-false}"
-    local preserve_host="${5:-$ST_PROXY_PRESERVE_HOST}"
-
-    local preserve_host_value="On"
-    [[ "$preserve_host" == "false" ]] && preserve_host_value="Off"
-
-    cat <<PROXYEOF
-<VirtualHost *:80>
-    ServerName ${domain}
-    ${aliases:+ServerAlias ${aliases}}
-    ServerAdmin ${ST_APACHE_SERVER_ADMIN}
-
-    ProxyPreserveHost ${preserve_host_value}
-    ProxyPass / ${backend_url}/
-    ProxyPassReverse / ${backend_url}/
-PROXYEOF
-
-    if [[ "$websocket" == "true" ]]; then
-        cat <<WSEOF
-
-    # WebSocket proxy support
-    RewriteEngine On
-    RewriteCond %{HTTP:Upgrade} websocket [NC]
-    RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/?(.*) ws://${backend_url#http://}/$1 [P,L]
-WSEOF
-    fi
-
-    cat <<PROXYEOF2
-
-    # Security Headers
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-
-$(generate_forwarded_headers_snippet)
-
-    ServerSignature Off
-
-    ErrorLog /var/www/${domain}/logs/error.log
-    CustomLog /var/www/${domain}/logs/access.log combined
-</VirtualHost>
-PROXYEOF2
-}
-
-# Detect vhost type from config (php or proxy)
-get_vhost_type() {
-    local domain="$1"
-    local config="/etc/apache2/sites-available/${domain}.conf"
-
-    if [[ ! -f "$config" ]]; then
-        return 1
-    fi
-
-    if grep -q "ProxyPass " "$config" 2>/dev/null; then
-        echo "proxy"
-    else
-        echo "php"
-    fi
-}
-
-# Extract backend URL from a proxy vhost config
-get_vhost_backend() {
-    local domain="$1"
-    local config="/etc/apache2/sites-available/${domain}.conf"
-
-    if [[ ! -f "$config" ]]; then
-        return 1
-    fi
-
-    grep -oP '^\s*ProxyPass\s+/\s+\K\S+' "$config" | head -n1 | sed 's|/$||'
 }
 
 # Generate welcome page content (pure function)
@@ -223,47 +80,28 @@ $docroot = htmlspecialchars(__DIR__, ENT_QUOTES, 'UTF-8');
 PHPEOF
 }
 
-# Enable an Apache site (wrapper with error handling)
-enable_site() {
-    local domain="$1"
-    if ! a2ensite "${domain}.conf" &>/dev/null; then
-        log_error "Failed to enable site: $domain"
-        return 1
-    fi
-}
-
-# Disable an Apache site (wrapper with error handling)
-disable_site() {
-    local domain="$1"
-    a2dissite "${domain}.conf" &>/dev/null || true
-}
-
-# Reload Apache with config test (safe reload with rollback info)
-reload_apache() {
-    log_info "Testing Apache configuration..."
-    if ! apache2ctl configtest &>/dev/null; then
-        log_error "Apache configuration test failed!"
-        apache2ctl configtest 2>&1 | sed 's/^/  /' >&2
-        return 1
-    fi
-
-    log_info "Reloading Apache..."
-    if ! systemctl reload apache2; then
-        log_error "Apache reload failed!"
-        return 1
-    fi
-
-    log_info "Apache reloaded successfully"
-}
-
 # =============================================================================
 # LOGROTATE - pure functions + operations
 # =============================================================================
 
 # Generate logrotate config for a domain (pure function)
+#
+# The postrotate reload command must be baked in as static text here, at
+# generation time: logrotate runs this file later, asynchronously via cron,
+# when $ST_WEBSERVER (a live bash variable in *this* process) no longer
+# exists to look up. Pick the backend-appropriate pid-check + reload command
+# now, once, based on $ST_WEBSERVER at the time the vhost is created.
 generate_logrotate_config() {
     local domain="$1"
     local log_dir="/var/www/${domain}/logs"
+    local pid_check reload_cmd
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        pid_check="/var/run/nginx.pid"
+        reload_cmd="systemctl reload nginx"
+    else
+        pid_check="/var/run/apache2/apache2.pid"
+        reload_cmd="systemctl reload apache2"
+    fi
 
     cat <<LOGROTATEEOF
 ${log_dir}/*.log {
@@ -277,8 +115,8 @@ ${log_dir}/*.log {
     create 640 www-data www-data
     sharedscripts
     postrotate
-        if [ -f /var/run/apache2/apache2.pid ]; then
-            systemctl reload apache2 > /dev/null 2>&1 || true
+        if [ -f ${pid_check} ]; then
+            ${reload_cmd} > /dev/null 2>&1 || true
         fi
     endscript
 }
@@ -357,7 +195,7 @@ create_vhost() {
     fi
 
     # Check for existing vhost
-    if vhost_exists "$domain"; then
+    if _ws_dispatch vhost_exists "$domain"; then
         log_warn "Virtual host for '$domain' already exists"
         confirm "Overwrite existing configuration?" || return 1
     fi
@@ -378,17 +216,11 @@ create_vhost() {
 
         # Write proxy vhost config
         local config
-        config=$(generate_proxy_config "$domain" "$aliases" "$backend_url" "$websocket" "$preserve_host")
-        safe_write_file "/etc/apache2/sites-available/${domain}.conf" "$config" 640
+        config=$(_ws_dispatch generate_proxy_config "$domain" "$aliases" "$backend_url" "$websocket" "$preserve_host")
+        safe_write_file "$(_ws_dispatch vhost_config_path "$domain")" "$config" 640
 
-        # Enable required Apache modules
-        a2enmod headers 2>/dev/null || true
-        a2enmod proxy 2>/dev/null || true
-        a2enmod proxy_http 2>/dev/null || true
-        if [[ "$websocket" == "true" ]]; then
-            a2enmod proxy_wstunnel 2>/dev/null || true
-            a2enmod rewrite 2>/dev/null || true
-        fi
+        # Enable required webserver modules
+        _ws_dispatch enable_modules_proxy "$websocket"
     else
         # Determine document root
         local docroot
@@ -420,21 +252,20 @@ create_vhost() {
 
         # Write vhost config
         local config
-        config=$(generate_vhost_config "$domain" "$aliases" "$php_version" "$docroot")
-        safe_write_file "/etc/apache2/sites-available/${domain}.conf" "$config" 640
+        config=$(_ws_dispatch generate_vhost_config "$domain" "$aliases" "$php_version" "$docroot")
+        safe_write_file "$(_ws_dispatch vhost_config_path "$domain")" "$config" 640
 
-        # Enable required Apache modules
-        a2enmod headers 2>/dev/null || true
-        a2enmod proxy_fcgi 2>/dev/null || true
+        # Enable required webserver modules
+        _ws_dispatch enable_modules_php
     fi
 
     # Enable site
-    enable_site "$domain" || return 1
+    _ws_dispatch enable_site "$domain" || return 1
 
     # Safe reload
-    if ! reload_apache; then
-        log_error "Apache reload failed - rolling back..."
-        disable_site "$domain"
+    if ! _ws_dispatch reload; then
+        log_error "Webserver reload failed - rolling back..."
+        _ws_dispatch disable_site "$domain"
         return 1
     fi
 
@@ -453,7 +284,7 @@ delete_vhost() {
 
     validate_input "$domain" "domain" || return 1
 
-    if ! vhost_exists "$domain"; then
+    if ! _ws_dispatch vhost_exists "$domain"; then
         log_error "Virtual host '$domain' does not exist"
         return 1
     fi
@@ -470,27 +301,36 @@ delete_vhost() {
     fi
 
     local docroot
-    docroot=$(get_vhost_docroot "$domain")
+    docroot=$(_ws_dispatch get_vhost_docroot "$domain")
 
     echo "WARNING: Virtual host will be deleted!"
     echo "  Domain:       $domain"
     echo "  DocumentRoot: $docroot"
 
     # Backup config before deletion
-    backup_before_delete "/etc/apache2/sites-available/${domain}.conf" "vhost_${domain}" || return 1
+    backup_before_delete "$(_ws_dispatch vhost_config_path "$domain")" "vhost_${domain}" || return 1
 
     confirm "Delete virtual host '$domain'?" || {
         echo "Aborted."
         return 1
     }
 
-    # Disable sites
-    disable_site "$domain"
-    disable_site "${domain}-le-ssl" 2>/dev/null || true
+    # Disable site
+    _ws_dispatch disable_site "$domain"
+
+    # SSL site disable + config removal is Apache/certbot-specific: certbot
+    # --apache splits SSL into a separate "<domain>-le-ssl.conf" file with its
+    # own sites-enabled symlink. Nginx SSL/certbot integration isn't wired up
+    # yet (tracked as follow-up work), so there's no equivalent file on nginx.
+    if [[ "${ST_WEBSERVER:-apache}" == "apache" ]]; then
+        apache_disable_site "${domain}-le-ssl" 2>/dev/null || true
+    fi
 
     # Remove config files
-    rm -f "/etc/apache2/sites-available/${domain}.conf"
-    rm -f "/etc/apache2/sites-available/${domain}-le-ssl.conf"
+    rm -f "$(_ws_dispatch vhost_config_path "$domain")"
+    if [[ "${ST_WEBSERVER:-apache}" == "apache" ]]; then
+        rm -f "${ST_APACHE_SITES_AVAILABLE}/${domain}-le-ssl.conf"
+    fi
 
     # Remove logrotate config
     remove_logrotate "$domain"
@@ -507,7 +347,7 @@ delete_vhost() {
         fi
     fi
 
-    reload_apache || log_warn "Apache reload failed"
+    _ws_dispatch reload || log_warn "Webserver reload failed"
 
     audit_log "INFO" "Deleted virtual host: $domain"
     log_info "Virtual host '$domain' deleted"
@@ -517,24 +357,49 @@ delete_vhost() {
 list_vhosts() {
     print_header "Virtual Hosts"
 
-    echo "Active sites:"
-    local found=0
-    for f in /etc/apache2/sites-enabled/*.conf; do
-        [[ -f "$f" ]] || continue
-        echo "  - $(basename "$f" .conf)"
-        found=1
-    done
-    [[ $found -eq 0 ]] && echo "  (none)"
+    # Directory layout (and filename convention: Apache uses "<domain>.conf",
+    # Debian's nginx convention uses the bare "<domain>") differs enough
+    # between backends that a single glob can't express both -- branch here
+    # rather than inventing a new _ws_dispatch abstraction for one caller.
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "Active sites:"
+        local found=0
+        for f in "${ST_NGINX_SITES_ENABLED}"/*; do
+            [[ -f "$f" ]] || continue
+            echo "  - $(basename "$f")"
+            found=1
+        done
+        [[ $found -eq 0 ]] && echo "  (none)"
 
-    echo ""
-    echo "Available sites:"
-    found=0
-    for f in /etc/apache2/sites-available/*.conf; do
-        [[ -f "$f" ]] || continue
-        echo "  - $(basename "$f" .conf)"
-        found=1
-    done
-    [[ $found -eq 0 ]] && echo "  (none)"
+        echo ""
+        echo "Available sites:"
+        found=0
+        for f in "${ST_NGINX_SITES_AVAILABLE}"/*; do
+            [[ -f "$f" ]] || continue
+            echo "  - $(basename "$f")"
+            found=1
+        done
+        [[ $found -eq 0 ]] && echo "  (none)"
+    else
+        echo "Active sites:"
+        local found=0
+        for f in "${ST_APACHE_SITES_ENABLED}"/*.conf; do
+            [[ -f "$f" ]] || continue
+            echo "  - $(basename "$f" .conf)"
+            found=1
+        done
+        [[ $found -eq 0 ]] && echo "  (none)"
+
+        echo ""
+        echo "Available sites:"
+        found=0
+        for f in "${ST_APACHE_SITES_AVAILABLE}"/*.conf; do
+            [[ -f "$f" ]] || continue
+            echo "  - $(basename "$f" .conf)"
+            found=1
+        done
+        [[ $found -eq 0 ]] && echo "  (none)"
+    fi
 }
 
 # Change PHP version for an existing vhost
@@ -545,7 +410,8 @@ change_php_version() {
     validate_input "$domain" "domain" || return 1
     validate_input "$php_version" "php_version" || return 1
 
-    local config="/etc/apache2/sites-available/${domain}.conf"
+    local config
+    config=$(_ws_dispatch vhost_config_path "$domain")
     if [[ ! -f "$config" ]]; then
         log_error "Virtual host '$domain' does not exist"
         return 1
@@ -558,7 +424,7 @@ change_php_version() {
 
     log_info "Changing PHP version for '$domain' to $php_version..."
 
-    # Backup to temp dir (not in Apache config dir to avoid stale .backup files)
+    # Backup to temp dir (not in webserver config dir to avoid stale .backup files)
     local config_backup
     config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
     if ! cp "$config" "$config_backup"; then
@@ -568,7 +434,7 @@ change_php_version() {
     fi
 
     # Replace PHP version in config
-    if ! sed -i "s|proxy:unix:/run/php/php[0-9.]*-fpm.sock|proxy:unix:/run/php/php${php_version}-fpm.sock|g" "$config"; then
+    if ! _ws_dispatch change_php_version_in_config "$config" "$php_version"; then
         log_error "Failed to update configuration"
         cp "$config_backup" "$config"
         rm -f "$config_backup"
@@ -576,11 +442,11 @@ change_php_version() {
     fi
 
     # Safe reload with rollback
-    if ! reload_apache; then
-        log_error "Apache reload failed - rolling back..."
+    if ! _ws_dispatch reload; then
+        log_error "Webserver reload failed - rolling back..."
         cp "$config_backup" "$config"
         rm -f "$config_backup"
-        reload_apache || true
+        _ws_dispatch reload || true
         return 1
     fi
 
@@ -595,7 +461,7 @@ show_vhost_info() {
 
     validate_input "$domain" "domain" || return 1
 
-    if ! vhost_exists "$domain"; then
+    if ! _ws_dispatch vhost_exists "$domain"; then
         log_error "Virtual host '$domain' does not exist"
         return 1
     fi
@@ -603,39 +469,45 @@ show_vhost_info() {
     print_header "Virtual Host: $domain"
 
     local vtype
-    vtype=$(get_vhost_type "$domain")
+    vtype=$(_ws_dispatch get_vhost_type "$domain")
 
     echo "  Domain:       $domain"
     echo "  Type:         ${vtype:-unknown}"
 
     if [[ "$vtype" == "proxy" ]]; then
         local backend
-        backend=$(get_vhost_backend "$domain")
+        backend=$(_ws_dispatch get_vhost_backend "$domain")
         echo "  Backend:      ${backend:-unknown}"
 
         # Check for WebSocket support
-        if grep -q "proxy_wstunnel\|ws://" "/etc/apache2/sites-available/${domain}.conf" 2>/dev/null; then
+        if _ws_dispatch websocket_enabled "$domain"; then
             echo "  WebSocket:    enabled"
         else
             echo "  WebSocket:    disabled"
         fi
     else
         local docroot php_version
-        docroot=$(get_vhost_docroot "$domain")
-        php_version=$(get_vhost_php_version "$domain")
+        docroot=$(_ws_dispatch get_vhost_docroot "$domain")
+        php_version=$(_ws_dispatch get_vhost_php_version "$domain")
         echo "  DocumentRoot: ${docroot:-unknown}"
         echo "  PHP version:  ${php_version:-unknown}"
     fi
 
-    # Check if SSL is configured
-    if [[ -f "/etc/apache2/sites-available/${domain}-le-ssl.conf" ]]; then
-        echo "  SSL:          enabled"
+    # Check if SSL is configured. SSL/certbot integration only exists for
+    # Apache today (see lib/ssl.sh) -- be honest about that on nginx rather
+    # than printing a possibly-wrong "not configured".
+    if [[ "${ST_WEBSERVER:-apache}" == "apache" ]]; then
+        if [[ -f "${ST_APACHE_SITES_AVAILABLE}/${domain}-le-ssl.conf" ]]; then
+            echo "  SSL:          enabled"
+        else
+            echo "  SSL:          not configured"
+        fi
     else
-        echo "  SSL:          not configured"
+        echo "  SSL:          not applicable (nginx)"
     fi
 
     # Check if site is enabled
-    if [[ -L "/etc/apache2/sites-enabled/${domain}.conf" ]]; then
+    if _ws_dispatch vhost_enabled "$domain"; then
         echo "  Status:       enabled"
     else
         echo "  Status:       disabled"
@@ -645,60 +517,6 @@ show_vhost_info() {
 # =============================================================================
 # REDIRECT MANAGEMENT
 # =============================================================================
-
-# Generate a redirect vhost config (pure function)
-generate_redirect_config() {
-    local source_domain="$1"
-    local target_url="$2"
-    local code="${3:-301}"
-
-    cat <<REDIRECTEOF
-# Redirect vhost for ${source_domain}
-# Created by server-tools on $(date '+%Y-%m-%d %H:%M:%S')
-<VirtualHost *:80>
-    ServerName ${source_domain}
-    ServerAdmin ${ST_APACHE_SERVER_ADMIN}
-
-    Redirect ${code} / ${target_url}
-
-    ErrorLog /var/log/apache2/${source_domain}-error.log
-</VirtualHost>
-REDIRECTEOF
-}
-
-# Generate www redirect snippet (pure function)
-generate_www_redirect_snippet() {
-    local domain="$1"
-    local direction="${2:-to_www}"
-
-    if [[ "$direction" == "to_www" ]]; then
-        cat <<WWWEOF
-    # Redirect non-www to www
-    RewriteEngine On
-    RewriteCond %{HTTP_HOST} ^${domain}\$ [NC]
-    RewriteRule ^(.*)\$ http://www.${domain}\$1 [R=301,L]
-WWWEOF
-    else
-        cat <<WWWEOF
-    # Redirect www to non-www
-    RewriteEngine On
-    RewriteCond %{HTTP_HOST} ^www\.${domain}\$ [NC]
-    RewriteRule ^(.*)\$ http://${domain}\$1 [R=301,L]
-WWWEOF
-    fi
-}
-
-# Generate HTTPS redirect snippet (pure function)
-generate_https_redirect_snippet() {
-    local domain="$1"
-
-    cat <<HTTPSEOF
-    # Force HTTPS redirect
-    RewriteEngine On
-    RewriteCond %{HTTPS} off
-    RewriteRule ^(.*)\$ https://%{HTTP_HOST}\$1 [R=301,L]
-HTTPSEOF
-}
 
 # Create a redirect vhost (high-level operation)
 create_redirect() {
@@ -714,7 +532,8 @@ create_redirect() {
         return 1
     fi
 
-    local config_file="/etc/apache2/sites-available/${source_domain}.conf"
+    local config_file
+    config_file=$(_ws_dispatch vhost_config_path "$source_domain")
     if [[ -f "$config_file" ]]; then
         log_error "Config already exists: $config_file"
         return 1
@@ -723,11 +542,11 @@ create_redirect() {
     log_info "Creating redirect: $source_domain -> $target_url ($code)"
 
     local config
-    config=$(generate_redirect_config "$source_domain" "$target_url" "$code")
+    config=$(_ws_dispatch generate_redirect_config "$source_domain" "$target_url" "$code")
 
     safe_write_file "$config_file" "$config" 644
-    enable_site "$source_domain" || return 1
-    reload_apache || return 1
+    _ws_dispatch enable_site "$source_domain" || return 1
+    _ws_dispatch reload || return 1
 
     audit_log "INFO" "Created redirect: $source_domain -> $target_url ($code)"
     log_info "Redirect created successfully"
@@ -740,19 +559,17 @@ add_www_redirect() {
 
     validate_input "$domain" "domain" || return 1
 
-    local config_file="/etc/apache2/sites-available/${domain}.conf"
+    local config_file
+    config_file=$(_ws_dispatch vhost_config_path "$domain")
     if [[ ! -f "$config_file" ]]; then
         log_error "VHost config not found: $config_file"
         return 1
     fi
 
-    # Check if rewrite module is enabled
-    if ! apache2ctl -M 2>/dev/null | grep -q "rewrite_module"; then
-        log_info "Enabling rewrite module..."
-        a2enmod rewrite &>/dev/null
-    fi
+    # Ensure the rewrite-equivalent capability is available (no-op on nginx)
+    _ws_dispatch rewrite_module_ensure
 
-    # Backup to temp dir (not in Apache config dir to avoid stale .bak files)
+    # Backup to temp dir (not in webserver config dir to avoid stale .bak files)
     local config_backup
     config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
     cp "$config_file" "$config_backup" || {
@@ -761,16 +578,23 @@ add_www_redirect() {
     }
 
     local snippet
-    snippet=$(generate_www_redirect_snippet "$domain" "$direction")
+    snippet=$(_ws_dispatch generate_www_redirect_snippet "$domain" "$direction")
 
-    # Insert snippet before </VirtualHost>
-    sed -i "/<\/VirtualHost>/i\\${snippet}" "$config_file"
+    # Insert snippet before the config's closing tag. Function names differ
+    # between backends (apache_insert_before_close vs.
+    # nginx_insert_before_server_close), so branch inline rather than forcing
+    # this through _ws_dispatch's shared-suffix convention.
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        nginx_insert_before_server_close "$config_file" "$snippet"
+    else
+        apache_insert_before_close "$config_file" "$snippet"
+    fi
 
-    reload_apache || {
-        log_warn "Apache reload failed, restoring backup..."
+    _ws_dispatch reload || {
+        log_warn "Webserver reload failed, restoring backup..."
         cp "$config_backup" "$config_file"
         rm -f "$config_backup"
-        reload_apache
+        _ws_dispatch reload
         return 1
     }
 
@@ -785,19 +609,17 @@ force_https() {
 
     validate_input "$domain" "domain" || return 1
 
-    local config_file="/etc/apache2/sites-available/${domain}.conf"
+    local config_file
+    config_file=$(_ws_dispatch vhost_config_path "$domain")
     if [[ ! -f "$config_file" ]]; then
         log_error "VHost config not found: $config_file"
         return 1
     fi
 
-    # Check if rewrite module is enabled
-    if ! apache2ctl -M 2>/dev/null | grep -q "rewrite_module"; then
-        log_info "Enabling rewrite module..."
-        a2enmod rewrite &>/dev/null
-    fi
+    # Ensure the rewrite-equivalent capability is available (no-op on nginx)
+    _ws_dispatch rewrite_module_ensure
 
-    # Backup to temp dir (not in Apache config dir to avoid stale .bak files)
+    # Backup to temp dir (not in webserver config dir to avoid stale .bak files)
     local config_backup
     config_backup=$(mktemp "/tmp/vhost-backup-XXXXXX")
     cp "$config_file" "$config_backup" || {
@@ -806,16 +628,20 @@ force_https() {
     }
 
     local snippet
-    snippet=$(generate_https_redirect_snippet "$domain")
+    snippet=$(_ws_dispatch generate_https_redirect_snippet "$domain")
 
-    # Insert snippet before </VirtualHost>
-    sed -i "/<\/VirtualHost>/i\\${snippet}" "$config_file"
+    # See add_www_redirect for why this is an inline branch, not _ws_dispatch.
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        nginx_insert_before_server_close "$config_file" "$snippet"
+    else
+        apache_insert_before_close "$config_file" "$snippet"
+    fi
 
-    reload_apache || {
-        log_warn "Apache reload failed, restoring backup..."
+    _ws_dispatch reload || {
+        log_warn "Webserver reload failed, restoring backup..."
         cp "$config_backup" "$config_file"
         rm -f "$config_backup"
-        reload_apache
+        _ws_dispatch reload
         return 1
     }
 

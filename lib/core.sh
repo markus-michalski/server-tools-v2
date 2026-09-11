@@ -82,10 +82,15 @@ check_root() {
 }
 
 # Verify all required system commands are available (MySQL excluded — see check_db_dependencies)
+# Gates on the selected webserver backend rather than hardcoding apache2ctl.
+# Uses the inline default deliberately: core.sh doesn't source config.sh (config.sh
+# sources core.sh, not the other way around), so ST_WEBSERVER may not be set yet.
 check_dependencies() {
     local missing=()
+    local webserver_cmd="apache2ctl"
+    [[ "${ST_WEBSERVER:-apache}" == "nginx" ]] && webserver_cmd="nginx"
 
-    for cmd in apache2ctl openssl gzip systemctl realpath; do
+    for cmd in "$webserver_cmd" openssl gzip systemctl realpath; do
         if ! command_exists "$cmd"; then
             missing+=("$cmd")
         fi

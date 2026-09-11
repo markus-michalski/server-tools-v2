@@ -234,7 +234,7 @@ create_domain_user() {
     fi
 
     # Warn if no vhost exists
-    if ! vhost_exists "$domain"; then
+    if ! apache_vhost_exists "$domain"; then
         log_warn "No Apache vhost found for '$domain'. User will be created but web access may not work."
         confirm "Continue without vhost?" || return 1
     fi
