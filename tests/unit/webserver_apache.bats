@@ -522,18 +522,13 @@ teardown() {
 }
 
 @test "apache_insert_before_close preserves every line of a multi-line snippet" {
-    # KNOWN BUG, tracked as #18: sed's "i\" command needs each line of its
-    # insert text backslash-escaped for POSIX multi-line continuation; this
-    # snippet has real embedded newlines instead, so GNU sed silently inserts
-    # only the first line and drops the rest. This is the exact shape of
-    # snippet apache_generate_www_redirect_snippet/apache_generate_https_redirect_snippet
-    # produce, meaning add_www_redirect()/force_https() currently ship vhosts
-    # missing their actual RewriteRule directives. Pre-existing on main, not
-    # introduced by the nginx webserver-support PR that extracted this
-    # function -- left unfixed here deliberately, see #18. Remove the `skip`
-    # once #18 lands.
-    skip "known bug #18: sed i\\ silently drops all but the first line of a multi-line snippet"
-
+    # Regression test for #18: sed's "i\" command needs each line of its
+    # insert text backslash-escaped for POSIX multi-line continuation. The
+    # snippet variable here has real embedded newlines instead, so a naive
+    # `sed -i "/<\/VirtualHost>/i\\${snippet}"` silently inserted only the
+    # first line and dropped the rest -- meaning add_www_redirect()/
+    # force_https() were shipping vhost configs missing their actual
+    # RewriteRule directives.
     local config="${TEST_TMPDIR}/site.conf"
     apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html" > "$config"
 
@@ -542,5 +537,115 @@ teardown() {
     apache_insert_before_close "$config" "$snippet"
 
     assert_file_contains "$config" "RewriteEngine On"
+    assert_file_contains "$config" "RewriteCond"
     assert_file_contains "$config" "RewriteRule"
+}
+
+@test "apache_insert_before_close inserts the snippet before the closing VirtualHost tag" {
+    local config="${TEST_TMPDIR}/site.conf"
+    apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html" > "$config"
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    run grep -n "inserted marker\|</VirtualHost>" "$config"
+    assert_success
+    # "inserted marker" must appear on an earlier line number than </VirtualHost>
+    # (head -n1 guards against these becoming multi-line operands to -lt if a
+    # fixture ever grows a second match)
+    local marker_line vhost_close_line
+    marker_line=$(grep -n "inserted marker" "$config" | head -n1 | cut -d: -f1)
+    vhost_close_line=$(grep -n "</VirtualHost>" "$config" | head -n1 | cut -d: -f1)
+    [[ "$marker_line" -lt "$vhost_close_line" ]]
+}
+
+@test "apache_insert_before_close preserves the rest of the config unchanged" {
+    local config="${TEST_TMPDIR}/site.conf"
+    apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html" > "$config"
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    run diff <(grep -v "inserted marker" "$config") \
+        <(apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html")
+    assert_success
+}
+
+@test "apache_insert_before_close fails cleanly when the config has no </VirtualHost> tag" {
+    # Realistic shape: a truncated file (interrupted write, disk full mid-cp),
+    # not just arbitrary non-vhost content.
+    local config="${TEST_TMPDIR}/malformed.conf"
+    printf '<VirtualHost *:80>\n    ServerName example.com\n' > "$config"
+
+    run apache_insert_before_close "$config" "    # inserted marker"
+    assert_failure
+}
+
+@test "apache_insert_before_close preserves the config file's permission mode" {
+    local config="${TEST_TMPDIR}/site.conf"
+    apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html" > "$config"
+    chmod 640 "$config"
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    run stat -c '%a' "$config"
+    assert_output "640"
+}
+
+@test "apache_insert_before_close handles </VirtualHost> on the file's first line" {
+    local config="${TEST_TMPDIR}/site.conf"
+    printf '</VirtualHost>\n' > "$config"
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    run head -n1 "$config"
+    assert_output "    # inserted marker"
+    assert_file_contains "$config" "</VirtualHost>"
+}
+
+@test "apache_insert_before_close ignores a commented-out </VirtualHost> tag" {
+    # An unanchored grep for "</VirtualHost>" also matches "#</VirtualHost>"
+    # in a hand-edited config with an old, disabled block above the live one
+    # -- landing the snippet at global server scope instead of inside the
+    # real vhost (RewriteEngine/RewriteCond/RewriteRule are all legal there
+    # too, so apache2ctl configtest and reload both succeed while silently
+    # affecting every site on the box instead of the intended one).
+    local config="${TEST_TMPDIR}/site.conf"
+    cat > "$config" <<'EOF'
+# Old config, disabled:
+#<VirtualHost *:80>
+#    ServerName old.example.com
+#</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName example.com
+</VirtualHost>
+EOF
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    local marker_line real_close_line
+    marker_line=$(grep -n "inserted marker" "$config" | head -n1 | cut -d: -f1)
+    real_close_line=$(grep -n '^</VirtualHost>' "$config" | head -n1 | cut -d: -f1)
+    # The marker must land right before the real (uncommented) close, not
+    # the commented-out one a few lines above it.
+    [[ "$marker_line" -eq "$((real_close_line - 1))" ]]
+}
+
+@test "apache_insert_before_close preserves content after the first </VirtualHost> (a second block)" {
+    local config="${TEST_TMPDIR}/site.conf"
+    cat > "$config" <<'EOF'
+<VirtualHost *:80>
+    ServerName first.example.com
+</VirtualHost>
+<VirtualHost *:443>
+    ServerName first.example.com
+</VirtualHost>
+EOF
+
+    apache_insert_before_close "$config" "    # inserted marker"
+
+    assert_file_contains "$config" "ServerName first.example.com"
+    assert_file_contains "$config" "VirtualHost \*:443"
+    # The marker only landed before the FIRST close, not both
+    run grep -c "inserted marker" "$config"
+    assert_output "1"
 }

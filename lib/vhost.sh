@@ -588,7 +588,11 @@ add_www_redirect() {
         nginx_insert_before_server_close "$config_file" "$snippet"
     else
         apache_insert_before_close "$config_file" "$snippet"
-    fi
+    fi || {
+        log_error "Failed to insert www redirect into $config_file"
+        rm -f "$config_backup"
+        return 1
+    }
 
     _ws_dispatch reload || {
         log_warn "Webserver reload failed, restoring backup..."
@@ -635,7 +639,11 @@ force_https() {
         nginx_insert_before_server_close "$config_file" "$snippet"
     else
         apache_insert_before_close "$config_file" "$snippet"
-    fi
+    fi || {
+        log_error "Failed to insert HTTPS redirect into $config_file"
+        rm -f "$config_backup"
+        return 1
+    }
 
     _ws_dispatch reload || {
         log_warn "Webserver reload failed, restoring backup..."

@@ -355,9 +355,45 @@ apache_rewrite_module_ensure() {
     fi
 }
 
-# Insert a config snippet right before the closing </VirtualHost> tag
+# Insert a config snippet right before the first </VirtualHost> closing tag.
+#
+# Deliberately not sed's "i\" command: sed's multi-line insert text needs a
+# backslash before every embedded newline (POSIX continuation syntax), and
+# snippet is a plain multi-line string without that escaping -- sed would
+# silently insert only the first line and discard the rest. head/tail avoids
+# that whole class of bug. Targets the *first* </VirtualHost> match, not
+# every match the way the old sed did -- for force_https() in particular,
+# inserting into every block would create a redirect loop on a :443 block;
+# for the single-block files this tool generates it's a no-op either way.
 apache_insert_before_close() {
     local config_file="$1"
     local snippet="$2"
-    sed -i "/<\/VirtualHost>/i\\${snippet}" "$config_file"
+
+    local line_no
+    line_no=$(grep -n '^[[:space:]]*</VirtualHost>' "$config_file" | head -n1 | cut -d: -f1)
+
+    if [[ -z "$line_no" ]]; then
+        log_error "No </VirtualHost> found in $config_file"
+        return 1
+    fi
+
+    local tmp
+    tmp=$(mktemp "${config_file}.XXXXXX") || {
+        log_error "Failed to create temp file for $config_file"
+        return 1
+    }
+    # mktemp creates its file at mode 600; preserve the config's actual mode
+    # (640/644, see create_vhost/create_redirect) rather than silently
+    # narrowing permissions on the atomic rename below.
+    chmod --reference="$config_file" "$tmp" 2>/dev/null || chmod 640 "$tmp"
+
+    if ! { head -n "$((line_no - 1))" "$config_file" && printf '%s\n' "$snippet" && tail -n "+${line_no}" "$config_file"; } >"$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+
+    if ! mv -f "$tmp" "$config_file"; then
+        rm -f "$tmp"
+        return 1
+    fi
 }
