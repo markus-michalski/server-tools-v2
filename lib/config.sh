@@ -29,7 +29,7 @@ ST_PASSWORD_LENGTH="${ST_PASSWORD_LENGTH:-25}"
 ST_PASSWORD_MIN_LENGTH="${ST_PASSWORD_MIN_LENGTH:-12}"
 
 # Webserver backend selection
-ST_WEBSERVER="${ST_WEBSERVER:-apache}"   # apache | nginx
+ST_WEBSERVER="${ST_WEBSERVER:-apache}" # apache | nginx
 
 # Apache
 ST_APACHE_SERVER_ADMIN="${ST_APACHE_SERVER_ADMIN:-webmaster@localhost}"
