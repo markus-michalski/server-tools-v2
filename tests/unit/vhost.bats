@@ -387,6 +387,21 @@ teardown() {
     assert_output --partial "ws://localhost:3000"
 }
 
+@test "generate_proxy_config preserves literal \$1 mod_rewrite backreference in WebSocket rule" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true"
+    assert_success
+    assert_output --partial 'ws://localhost:3000/$1 [P,L]'
+}
+
+@test "generate_proxy_config uses wss:// and strips https:// for TLS backends" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run generate_proxy_config "app.example.com" "" "https://internal.example.com:8443" "true" "true"
+    assert_success
+    assert_output --partial 'wss://internal.example.com:8443/$1 [P,L]'
+    refute_output --partial "ws://https://"
+}
+
 @test "generate_proxy_config omits WebSocket rules when disabled" {
     export ST_PROXY_PRESERVE_HOST=true
     run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"

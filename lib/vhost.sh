@@ -133,13 +133,20 @@ generate_proxy_config() {
 PROXYEOF
 
     if [[ "$websocket" == "true" ]]; then
+        local ws_scheme="ws"
+        local ws_backend="${backend_url#http://}"
+        if [[ "$backend_url" == https://* ]]; then
+            ws_scheme="wss"
+            ws_backend="${backend_url#https://}"
+        fi
+
         cat <<WSEOF
 
     # WebSocket proxy support
     RewriteEngine On
     RewriteCond %{HTTP:Upgrade} websocket [NC]
     RewriteCond %{HTTP:Connection} upgrade [NC]
-    RewriteRule ^/?(.*) ws://${backend_url#http://}/$1 [P,L]
+    RewriteRule ^/?(.*) ${ws_scheme}://${ws_backend}/\$1 [P,L]
 WSEOF
     fi
 
