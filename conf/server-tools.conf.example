@@ -19,6 +19,23 @@
 # Database backup directory (for dump/export operations)
 #ST_DB_BACKUP_DIR="/root/db-backups"
 
+# --- Webserver backend ---
+
+# Which webserver backend to use for vhost management: "apache" or "nginx".
+# SSL/certbot management (the "ssl" command) currently only supports Apache
+# regardless of this setting -- nginx SSL support is not yet implemented.
+#ST_WEBSERVER="apache"
+
+# Apache sites-available / sites-enabled directories (only used when
+# ST_WEBSERVER="apache")
+#ST_APACHE_SITES_AVAILABLE="/etc/apache2/sites-available"
+#ST_APACHE_SITES_ENABLED="/etc/apache2/sites-enabled"
+
+# Nginx sites-available / sites-enabled directories (only used when
+# ST_WEBSERVER="nginx")
+#ST_NGINX_SITES_AVAILABLE="/etc/nginx/sites-available"
+#ST_NGINX_SITES_ENABLED="/etc/nginx/sites-enabled"
+
 # --- PHP & Apache ---
 
 # Default PHP version for new virtual hosts

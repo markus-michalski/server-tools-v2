@@ -78,12 +78,19 @@ teardown() {
     assert_output --partial "does not exist"
 }
 
+@test "setup_ssl refuses to run when ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run setup_ssl "example.com"
+    assert_failure
+    assert_output --partial "only supports Apache"
+}
+
 @test "setup_ssl uses ST_CERTBOT_EMAIL when no email provided" {
-    # Create mock vhost config so vhost_exists passes
+    # Create mock vhost config so apache_vhost_exists passes
     mkdir -p "/tmp/test_apache_$$"
-    local orig_vhost_exists
-    # Override vhost_exists for this test
-    vhost_exists() { return 0; }
+    local orig_apache_vhost_exists
+    # Override apache_vhost_exists for this test
+    apache_vhost_exists() { return 0; }
     # Mock certbot
     mock_command "certbot" 'echo "mock certbot $@"; exit 0'
     mock_command "systemctl" 'exit 0'
@@ -96,7 +103,7 @@ teardown() {
 
 @test "setup_ssl uses webmaster@ fallback when no email configured" {
     export ST_CERTBOT_EMAIL=""
-    vhost_exists() { return 0; }
+    apache_vhost_exists() { return 0; }
     mock_command "certbot" 'echo "mock certbot $@"; exit 0'
     mock_command "systemctl" 'exit 0'
     mock_command "apache2ctl" 'exit 0'
@@ -117,6 +124,29 @@ teardown() {
     run delete_ssl "example.com"
     assert_failure
     assert_output --partial "No certificate found"
+}
+
+@test "delete_ssl refuses to run when ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run delete_ssl "example.com"
+    assert_failure
+    assert_output --partial "only supports Apache"
+}
+
+# --- recreate_all_ssl / setup_ssl_renewal webserver guard ---
+
+@test "recreate_all_ssl refuses to run when ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run recreate_all_ssl
+    assert_failure
+    assert_output --partial "only supports Apache"
+}
+
+@test "setup_ssl_renewal refuses to run when ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run setup_ssl_renewal
+    assert_failure
+    assert_output --partial "only supports Apache"
 }
 
 # --- list_certificates ---
@@ -342,7 +372,7 @@ EOF
     mkdir -p "$sites_dir"
     export ST_APACHE_SITES_AVAILABLE="$sites_dir"
 
-    vhost_exists() { return 0; }
+    apache_vhost_exists() { return 0; }
     mock_command "systemctl" 'exit 0'
     mock_command "apache2ctl" 'exit 0'
     # Simulate certbot creating SSL conf with wrong https://localhost (the bug)

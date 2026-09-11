@@ -1,4 +1,11 @@
 #!/usr/bin/env bats
+#
+# Tests for the webserver-agnostic orchestration layer in lib/vhost.sh:
+# input validation, welcome page, logrotate, and high-level operation
+# routing. Webserver-specific config generation/queries/mechanics are tested
+# in tests/unit/webserver_apache.bats and tests/unit/webserver_nginx.bats;
+# backend dispatch (_ws_dispatch) is tested in
+# tests/unit/vhost_webserver_router.bats.
 
 load ../test_helper
 
@@ -25,81 +32,6 @@ setup() {
 
 teardown() {
     [[ -d "${TEST_TMPDIR:-}" ]] && rm -rf "$TEST_TMPDIR"
-}
-
-# --- Pure functions (no mocking needed) ---
-
-@test "generate_forwarded_headers_snippet uses ap_expr for scheme and port" {
-    run generate_forwarded_headers_snippet
-    assert_success
-    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
-    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
-}
-
-@test "generate_vhost_config includes ServerName" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "ServerName example.com"
-}
-
-@test "generate_vhost_config includes PHP-FPM socket" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "php8.3-fpm.sock"
-}
-
-@test "generate_vhost_config includes ServerAlias when provided" {
-    run generate_vhost_config "example.com" "www.example.com" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "ServerAlias www.example.com"
-}
-
-@test "generate_vhost_config omits ServerAlias when empty" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    refute_output --partial "ServerAlias"
-}
-
-@test "generate_vhost_config includes security headers" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "X-Content-Type-Options"
-    assert_output --partial "X-Frame-Options"
-    assert_output --partial "Referrer-Policy"
-    assert_output --partial "Permissions-Policy"
-}
-
-@test "generate_vhost_config includes forwarded headers" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
-    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
-}
-
-@test "generate_vhost_config includes DocumentRoot" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "DocumentRoot /var/www/example.com/html"
-}
-
-@test "generate_vhost_config includes logging paths" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "ErrorLog /var/www/example.com/logs/error.log"
-    assert_output --partial "CustomLog /var/www/example.com/logs/access.log"
-}
-
-@test "generate_vhost_config disables directory listing" {
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "-Indexes"
-}
-
-@test "generate_vhost_config uses configurable ServerAdmin" {
-    ST_APACHE_SERVER_ADMIN="admin@myserver.com"
-    run generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html"
-    assert_success
-    assert_output --partial "ServerAdmin admin@myserver.com"
 }
 
 # --- Welcome page ---
@@ -152,57 +84,6 @@ teardown() {
 @test "show_vhost_info rejects invalid domain" {
     run show_vhost_info "bad;domain"
     assert_failure
-}
-
-# --- Redirect pure functions ---
-
-@test "generate_redirect_config includes ServerName" {
-    run generate_redirect_config "old.com" "https://new.com/" 301
-    assert_success
-    assert_output --partial "ServerName old.com"
-}
-
-@test "generate_redirect_config includes redirect directive" {
-    run generate_redirect_config "old.com" "https://new.com/" 301
-    assert_success
-    assert_output --partial "Redirect 301 / https://new.com/"
-}
-
-@test "generate_redirect_config supports 302 redirect" {
-    run generate_redirect_config "old.com" "https://new.com/" 302
-    assert_success
-    assert_output --partial "Redirect 302"
-}
-
-@test "generate_redirect_config includes VirtualHost block" {
-    run generate_redirect_config "old.com" "https://new.com/" 301
-    assert_success
-    assert_output --partial "<VirtualHost *:80>"
-    assert_output --partial "</VirtualHost>"
-}
-
-@test "generate_www_redirect_snippet generates to_www rules" {
-    run generate_www_redirect_snippet "example.com" "to_www"
-    assert_success
-    assert_output --partial "RewriteEngine On"
-    assert_output --partial "www.example.com"
-    assert_output --partial "R=301"
-}
-
-@test "generate_www_redirect_snippet generates from_www rules" {
-    run generate_www_redirect_snippet "example.com" "from_www"
-    assert_success
-    assert_output --partial "RewriteEngine On"
-    assert_output --partial "example.com"
-    assert_output --partial "R=301"
-}
-
-@test "generate_https_redirect_snippet generates HTTPS rewrite" {
-    run generate_https_redirect_snippet "example.com"
-    assert_success
-    assert_output --partial "RewriteEngine On"
-    assert_output --partial "HTTPS"
-    assert_output --partial "R=301"
 }
 
 # --- Redirect high-level validation ---
@@ -264,6 +145,19 @@ teardown() {
     assert_output --partial "systemctl reload apache2"
 }
 
+@test "generate_logrotate_config bakes in the nginx reload command when ST_WEBSERVER=nginx" {
+    # postrotate runs later, asynchronously via cron/logrotate -- $ST_WEBSERVER
+    # (a live bash variable in this process) won't exist then, so the
+    # backend-correct command must be baked in as static text at generation
+    # time, not looked up dynamically when logrotate actually runs.
+    export ST_WEBSERVER=nginx
+    run generate_logrotate_config "example.com"
+    assert_success
+    assert_output --partial "systemctl reload nginx"
+    assert_output --partial "/var/run/nginx.pid"
+    refute_output --partial "apache2"
+}
+
 @test "generate_logrotate_config uses ST_LOGROTATE_ROTATE value" {
     export ST_LOGROTATE_ROTATE=10
     run generate_logrotate_config "example.com"
@@ -285,133 +179,8 @@ teardown() {
 }
 
 # =============================================================================
-# REVERSE PROXY
+# REVERSE PROXY - high-level validation
 # =============================================================================
-
-@test "generate_proxy_config includes ServerName" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ServerName app.example.com"
-}
-
-@test "generate_proxy_config includes ProxyPass directives" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ProxyPass / http://localhost:3000/"
-    assert_output --partial "ProxyPassReverse / http://localhost:3000/"
-}
-
-@test "generate_proxy_config includes ProxyPreserveHost On" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ProxyPreserveHost On"
-}
-
-@test "generate_proxy_config supports ProxyPreserveHost Off" {
-    export ST_PROXY_PRESERVE_HOST=false
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "false"
-    assert_success
-    assert_output --partial "ProxyPreserveHost Off"
-}
-
-@test "generate_proxy_config includes ServerAlias when provided" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "www.app.example.com" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ServerAlias www.app.example.com"
-}
-
-@test "generate_proxy_config omits ServerAlias when empty" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    refute_output --partial "ServerAlias"
-}
-
-@test "generate_proxy_config includes security headers" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "X-Content-Type-Options"
-    assert_output --partial "X-Frame-Options"
-    assert_output --partial "Referrer-Policy"
-    assert_output --partial "Permissions-Policy"
-}
-
-@test "generate_proxy_config includes forwarded headers" {
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
-    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
-}
-
-@test "generate_proxy_config includes forwarded headers when WebSocket is enabled" {
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true"
-    assert_success
-    assert_output --partial 'RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}'
-    assert_output --partial 'RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}'
-}
-
-@test "generate_proxy_config includes logging paths" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ErrorLog /var/www/app.example.com/logs/error.log"
-    assert_output --partial "CustomLog /var/www/app.example.com/logs/access.log"
-}
-
-@test "generate_proxy_config does not include DocumentRoot" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    refute_output --partial "DocumentRoot"
-}
-
-@test "generate_proxy_config does not include PHP-FPM" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    refute_output --partial "php"
-    refute_output --partial "fpm"
-}
-
-@test "generate_proxy_config includes WebSocket rules when enabled" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true"
-    assert_success
-    assert_output --partial "RewriteEngine On"
-    assert_output --partial "HTTP:Upgrade"
-    assert_output --partial "ws://localhost:3000"
-}
-
-@test "generate_proxy_config omits WebSocket rules when disabled" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    refute_output --partial "ws://"
-    refute_output --partial "HTTP:Upgrade"
-}
-
-@test "generate_proxy_config includes VirtualHost block" {
-    export ST_PROXY_PRESERVE_HOST=true
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "<VirtualHost *:80>"
-    assert_output --partial "</VirtualHost>"
-}
-
-@test "generate_proxy_config uses configurable ServerAdmin" {
-    export ST_PROXY_PRESERVE_HOST=true
-    ST_APACHE_SERVER_ADMIN="admin@myserver.com"
-    run generate_proxy_config "app.example.com" "" "http://localhost:3000" "false" "true"
-    assert_success
-    assert_output --partial "ServerAdmin admin@myserver.com"
-}
-
-# --- Proxy input validation ---
 
 @test "create_vhost proxy mode rejects missing backend URL" {
     run create_vhost "app.example.com" "" "" "" "false" "proxy" "" "false" "true"

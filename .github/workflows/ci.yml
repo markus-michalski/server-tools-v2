@@ -23,10 +23,10 @@ jobs:
           chmod +x /usr/local/bin/shfmt
 
       - name: Run ShellCheck
-        run: shellcheck -x bin/server-tools lib/*.sh
+        run: shellcheck -x bin/server-tools lib/*.sh lib/webserver/*.sh
 
       - name: Check formatting
-        run: shfmt -i 4 -bn -ci -d bin/server-tools lib/*.sh
+        run: shfmt -i 4 -bn -ci -d bin/server-tools lib/*.sh lib/webserver/*.sh
 
   test:
     runs-on: ubuntu-latest

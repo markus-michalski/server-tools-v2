@@ -28,9 +28,18 @@ ST_DEFAULT_COLLATION="${ST_DEFAULT_COLLATION:-utf8mb4_unicode_ci}"
 ST_PASSWORD_LENGTH="${ST_PASSWORD_LENGTH:-25}"
 ST_PASSWORD_MIN_LENGTH="${ST_PASSWORD_MIN_LENGTH:-12}"
 
+# Webserver backend selection
+ST_WEBSERVER="${ST_WEBSERVER:-apache}" # apache | nginx
+
 # Apache
 ST_APACHE_SERVER_ADMIN="${ST_APACHE_SERVER_ADMIN:-webmaster@localhost}"
+ST_APACHE_SITES_AVAILABLE="${ST_APACHE_SITES_AVAILABLE:-/etc/apache2/sites-available}"
+ST_APACHE_SITES_ENABLED="${ST_APACHE_SITES_ENABLED:-/etc/apache2/sites-enabled}"
 ST_DEFAULT_DOCROOT_PATTERN="${ST_DEFAULT_DOCROOT_PATTERN:-/var/www/{domain}/html}"
+
+# Nginx
+ST_NGINX_SITES_AVAILABLE="${ST_NGINX_SITES_AVAILABLE:-/etc/nginx/sites-available}"
+ST_NGINX_SITES_ENABLED="${ST_NGINX_SITES_ENABLED:-/etc/nginx/sites-enabled}"
 
 # Backup & Safety
 ST_AUTO_BACKUP="${ST_AUTO_BACKUP:-true}"
@@ -108,6 +117,12 @@ load_config() {
 
 # Validate configuration values
 validate_config() {
+    # Webserver backend must be a supported value
+    if [[ "$ST_WEBSERVER" != "apache" ]] && [[ "$ST_WEBSERVER" != "nginx" ]]; then
+        log_warn "ST_WEBSERVER must be 'apache' or 'nginx', got: $ST_WEBSERVER. Resetting to 'apache'."
+        ST_WEBSERVER="apache"
+    fi
+
     # Password length bounds
     if [[ "$ST_PASSWORD_LENGTH" -lt 12 ]] || [[ "$ST_PASSWORD_LENGTH" -gt 64 ]]; then
         log_warn "ST_PASSWORD_LENGTH should be between 12 and 64, got: $ST_PASSWORD_LENGTH. Resetting to 25."
@@ -146,6 +161,9 @@ show_config() {
     echo "Defaults:"
     echo "  PHP version:   $ST_DEFAULT_PHP_VERSION"
     echo "  DB charset:    $ST_DEFAULT_CHARSET / $ST_DEFAULT_COLLATION"
+    echo ""
+    echo "Webserver:"
+    echo "  Backend:       $ST_WEBSERVER"
     echo ""
     echo "Passwords:"
     echo "  Auto length:   $ST_PASSWORD_LENGTH"

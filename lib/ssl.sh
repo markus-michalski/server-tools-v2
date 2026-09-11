@@ -93,7 +93,12 @@ setup_ssl() {
 
     validate_input "$domain" "domain" || return 1
 
-    if ! vhost_exists "$domain"; then
+    if [[ "${ST_WEBSERVER:-apache}" != "apache" ]]; then
+        log_error "SSL setup currently only supports Apache (ST_WEBSERVER=apache). Nginx SSL support is not yet implemented."
+        return 1
+    fi
+
+    if ! apache_vhost_exists "$domain"; then
         log_error "Virtual host for '$domain' does not exist. Create it first."
         return 1
     fi
@@ -122,7 +127,7 @@ setup_ssl() {
 
     if certbot --apache -d "$domain" --non-interactive --agree-tos --email "$email" 2>&1; then
         fix_ssl_proxy_config "$domain" || log_warn "Failed to fix proxy passthrough in SSL vhost for $domain"
-        reload_apache || log_warn "Apache reload failed"
+        apache_reload || log_warn "Apache reload failed"
         audit_log "INFO" "Created SSL certificate for $domain"
         log_info "SSL certificate created for '$domain'"
         return 0
@@ -139,6 +144,11 @@ delete_ssl() {
 
     validate_input "$domain" "domain" || return 1
 
+    if [[ "${ST_WEBSERVER:-apache}" != "apache" ]]; then
+        log_error "SSL management currently only supports Apache (ST_WEBSERVER=apache). Nginx SSL support is not yet implemented."
+        return 1
+    fi
+
     if ! cert_exists "$domain"; then
         log_error "No certificate found for '$domain'"
         return 1
@@ -152,7 +162,7 @@ delete_ssl() {
 
     if certbot delete --cert-name "$domain" --non-interactive 2>&1; then
         rm -f "/etc/apache2/sites-available/${domain}-le-ssl.conf"
-        reload_apache || log_warn "Apache reload failed"
+        apache_reload || log_warn "Apache reload failed"
         audit_log "INFO" "Deleted SSL certificate for $domain"
         log_info "SSL certificate deleted for '$domain'"
         return 0
@@ -214,6 +224,11 @@ check_expiring_soon() {
 
 # Setup automatic SSL renewal
 setup_ssl_renewal() {
+    if [[ "${ST_WEBSERVER:-apache}" != "apache" ]]; then
+        log_error "SSL management currently only supports Apache (ST_WEBSERVER=apache). Nginx SSL support is not yet implemented."
+        return 1
+    fi
+
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local renewal_src="${script_dir}/ssl-renewal.sh"
@@ -273,6 +288,11 @@ EOF
 
 # Bulk recreate all SSL certificates with Apache plugin
 recreate_all_ssl() {
+    if [[ "${ST_WEBSERVER:-apache}" != "apache" ]]; then
+        log_error "SSL management currently only supports Apache (ST_WEBSERVER=apache). Nginx SSL support is not yet implemented."
+        return 1
+    fi
+
     print_header "Bulk SSL Certificate Recreation"
     echo "This recreates ALL certificates using the Apache plugin."
     echo "Use this to fix renewal issues caused by mismatched methods."
@@ -285,7 +305,7 @@ recreate_all_ssl() {
             if [[ -d "$cert_dir" ]]; then
                 local domain
                 domain=$(basename "$cert_dir")
-                if [[ "$domain" != "*" ]] && vhost_exists "$domain"; then
+                if [[ "$domain" != "*" ]] && apache_vhost_exists "$domain"; then
                     domains+=("$domain")
                 fi
             fi
@@ -311,7 +331,7 @@ recreate_all_ssl() {
     # Phase 1: Disable SSL sites
     log_info "Disabling SSL configurations..."
     for domain in "${domains[@]}"; do
-        disable_site "${domain}-le-ssl" 2>/dev/null || true
+        apache_disable_site "${domain}-le-ssl" 2>/dev/null || true
         rm -f "/etc/apache2/sites-available/${domain}-le-ssl.conf"
     done
     systemctl reload apache2
@@ -341,7 +361,7 @@ recreate_all_ssl() {
     echo "Results: $success/$total successful"
 
     if [[ $success -gt 0 ]]; then
-        reload_apache || log_warn "Apache reload failed"
+        apache_reload || log_warn "Apache reload failed"
     fi
 
     echo ""
