@@ -402,6 +402,79 @@ list_vhosts() {
     fi
 }
 
+# =============================================================================
+# AUDIT - diff a deployed vhost config against the canonical template
+# =============================================================================
+
+# Audit a single deployed vhost against the canonical template
+audit_vhost() {
+    local domain="$1"
+
+    validate_input "$domain" "domain" || return 1
+
+    if ! _ws_dispatch vhost_exists "$domain"; then
+        log_error "Virtual host '$domain' does not exist"
+        return 1
+    fi
+
+    # Template drift checks are Apache-directive-specific (ProxyPass, ErrorLog/CustomLog,
+    # RequestHeader) -- issue #13 that motivated this predates nginx support entirely, and
+    # no equivalent nginx drift has been reported. Skip cleanly on nginx rather than
+    # misapplying Apache syntax checks to an nginx server block.
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "Vhost: ${domain}"
+        echo "  [SKIP]  template audit not yet implemented for nginx (see #13)"
+        return 0
+    fi
+
+    local config_content
+    config_content=$(cat "$(_ws_dispatch vhost_config_path "$domain")")
+    apache_audit_vhost_config "$domain" "$config_content"
+}
+
+# Audit all deployed vhosts against the canonical template; prints a report and returns
+# non-zero if any vhost has drifted (useful for scripting/CI, e.g. a periodic drift check)
+audit_all_vhosts() {
+    print_header "VHost Template Audit"
+
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "(template audit not yet implemented for nginx, see #13)"
+        return 0
+    fi
+
+    local drift_found=0
+    local found=0
+    local f domain
+    for f in "${ST_APACHE_SITES_AVAILABLE}"/*.conf; do
+        [[ -f "$f" ]] || continue
+        [[ "$f" == *-le-ssl.conf ]] && continue
+        domain=$(basename "$f" .conf)
+
+        # Apache's own stock configs aren't managed by server-tools and aren't domains --
+        # skip them rather than reporting a confusing "invalid domain" error as drift.
+        case "$domain" in
+            000-default | default-ssl | default) continue ;;
+        esac
+
+        found=1
+        audit_vhost "$domain" || drift_found=1
+        echo ""
+    done
+
+    if [[ $found -eq 0 ]]; then
+        echo "(no vhosts found)"
+        return 0
+    fi
+
+    if [[ $drift_found -eq 0 ]]; then
+        log_info "No drift detected across audited vhosts"
+    else
+        log_warn "Drift detected - see [DRIFT] lines above"
+    fi
+
+    return "$drift_found"
+}
+
 # Change PHP version for an existing vhost
 change_php_version() {
     local domain="$1"

@@ -397,3 +397,61 @@ apache_insert_before_close() {
         return 1
     fi
 }
+
+# Check a deployed Apache vhost config's content against the canonical template (pure
+# function, no side effects). Takes the config content as an argument (instead of reading
+# a file) so it can be unit tested and reused for both deployed vhosts and freshly generated
+# configs. Prints an [OK]/[DRIFT] report line per check and returns 1 if any check drifted,
+# 0 otherwise.
+apache_audit_vhost_config() {
+    local domain="$1"
+    local config_content="$2"
+    local drift=0
+
+    echo "Vhost: ${domain}"
+
+    # Redirect-only vhosts (apache_generate_redirect_config) are a deliberately different
+    # template -- no proxy/PHP-FPM handler, no forwarded headers, no CustomLog. Checking them
+    # against the proxy/PHP canonical template would always report false drift, so skip them
+    # explicitly.
+    if [[ "$config_content" != *"ProxyPass"* ]] && [[ "$config_content" != *"SetHandler"* ]]; then
+        echo "  [SKIP]  redirect-only vhost, canonical template checks not applicable"
+        return 0
+    fi
+
+    if [[ "$config_content" == *"X-Forwarded-Proto"* ]]; then
+        echo "  [OK]    X-Forwarded-Proto header present"
+    else
+        echo "  [DRIFT] X-Forwarded-Proto header missing"
+        drift=1
+    fi
+
+    if [[ "$config_content" == *"X-Forwarded-Port"* ]]; then
+        echo "  [OK]    X-Forwarded-Port header present"
+    else
+        echo "  [DRIFT] X-Forwarded-Port header missing"
+        drift=1
+    fi
+
+    local expected_error_log="/var/www/${domain}/logs/error.log"
+    local expected_access_log="/var/www/${domain}/logs/access.log"
+    local errorlog_line customlog_line
+    errorlog_line=$(grep -m1 -i "^[[:space:]]*ErrorLog[[:space:]]" <<<"$config_content" || true)
+    customlog_line=$(grep -m1 -i "^[[:space:]]*CustomLog[[:space:]]" <<<"$config_content" || true)
+
+    if [[ "$errorlog_line" == *"$expected_error_log"* ]]; then
+        echo "  [OK]    ErrorLog matches canonical path (rotated via /etc/logrotate.d/vhost-${domain})"
+    else
+        echo "  [DRIFT] ErrorLog does not match canonical path ${expected_error_log} (found: ${errorlog_line:-none})"
+        drift=1
+    fi
+
+    if [[ "$customlog_line" == *"$expected_access_log"* ]]; then
+        echo "  [OK]    CustomLog matches canonical path (rotated via /etc/logrotate.d/vhost-${domain})"
+    else
+        echo "  [DRIFT] CustomLog does not match canonical path ${expected_access_log} (found: ${customlog_line:-none})"
+        drift=1
+    fi
+
+    return "$drift"
+}

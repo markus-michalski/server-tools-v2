@@ -86,6 +86,67 @@ teardown() {
     assert_failure
 }
 
+@test "audit_vhost rejects invalid domain" {
+    run audit_vhost "bad;domain"
+    assert_failure
+}
+
+@test "audit_vhost fails when the vhost does not exist" {
+    export ST_APACHE_SITES_AVAILABLE="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$ST_APACHE_SITES_AVAILABLE"
+    run audit_vhost "example.com"
+    assert_failure
+}
+
+@test "audit_vhost skips cleanly on nginx (template audit not yet implemented)" {
+    export ST_WEBSERVER="nginx"
+    export ST_NGINX_SITES_AVAILABLE="${TEST_TMPDIR}/nginx-sites-available"
+    mkdir -p "$ST_NGINX_SITES_AVAILABLE"
+    touch "${ST_NGINX_SITES_AVAILABLE}/example.com"
+    run audit_vhost "example.com"
+    assert_success
+    assert_output --partial "[SKIP]"
+    assert_output --partial "nginx"
+}
+
+@test "audit_all_vhosts skips cleanly on nginx (template audit not yet implemented)" {
+    export ST_WEBSERVER="nginx"
+    run audit_all_vhosts
+    assert_success
+    assert_output --partial "not yet implemented for nginx"
+}
+
+@test "audit_all_vhosts reports no vhosts found when sites-available is empty" {
+    export ST_APACHE_SITES_AVAILABLE="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$ST_APACHE_SITES_AVAILABLE"
+    run audit_all_vhosts
+    assert_success
+    assert_output --partial "(no vhosts found)"
+}
+
+@test "audit_all_vhosts skips Apache's own stock configs" {
+    export ST_APACHE_SITES_AVAILABLE="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$ST_APACHE_SITES_AVAILABLE"
+    printf '<VirtualHost *:80>\n</VirtualHost>\n' > "${ST_APACHE_SITES_AVAILABLE}/000-default.conf"
+    printf '<VirtualHost *:443>\n</VirtualHost>\n' > "${ST_APACHE_SITES_AVAILABLE}/default-ssl.conf"
+    run audit_all_vhosts
+    assert_success
+    assert_output --partial "(no vhosts found)"
+    refute_output --partial "Vhost: 000-default"
+    refute_output --partial "Vhost: default-ssl"
+}
+
+@test "audit_all_vhosts audits a real deployed vhost and reports drift" {
+    export ST_APACHE_SITES_AVAILABLE="${TEST_TMPDIR}/sites-available"
+    mkdir -p "$ST_APACHE_SITES_AVAILABLE"
+    printf '<VirtualHost *:80>\n    ServerName example.com\n    ProxyPass / http://localhost:3000/\n</VirtualHost>\n' \
+        > "${ST_APACHE_SITES_AVAILABLE}/example.com.conf"
+    run audit_all_vhosts
+    assert_failure
+    assert_output --partial "Vhost: example.com"
+    assert_output --partial "[DRIFT]"
+}
+
 # --- Redirect high-level validation ---
 
 @test "create_redirect rejects invalid domain" {
