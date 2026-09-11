@@ -389,6 +389,26 @@ cli_vhost() {
             [[ -z "$from" || -z "$to" ]] && cli_usage "vhost redirect" "--from <domain> --to <url> [--code 301|302]"
             create_redirect "$from" "$to" "$code"
             ;;
+        audit)
+            local domain=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --domain)
+                        domain="$2"
+                        shift 2
+                        ;;
+                    --help | -h)
+                        cli_usage "vhost audit" "[--domain <domain>]"
+                        ;;
+                    *) shift ;;
+                esac
+            done
+            if [[ -n "$domain" ]]; then
+                audit_vhost "$domain"
+            else
+                audit_all_vhosts
+            fi
+            ;;
         --help | -h | "")
             cat <<EOF
 Usage: server-tools vhost <action> [options]
@@ -400,6 +420,7 @@ Actions:
   php       Change PHP version
   info      Show vhost details
   redirect  Create domain redirect
+  audit     Diff vhost(s) against the canonical template, surface drift
 
 Create options:
   --domain <domain>         Domain name (required)
@@ -410,6 +431,9 @@ Create options:
   --preserve-host on|off    ProxyPreserveHost (default: on)
   --aliases <aliases>       Space-separated server aliases
   --docroot <path>          Custom DocumentRoot (for type=php)
+
+Audit options:
+  --domain <domain>         Audit a single vhost (default: audit all vhosts)
 
 Run 'server-tools vhost <action> --help' for details.
 EOF

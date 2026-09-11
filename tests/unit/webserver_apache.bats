@@ -649,3 +649,96 @@ EOF
     run grep -c "inserted marker" "$config"
     assert_output "1"
 }
+
+# =============================================================================
+# AUDIT — diff a deployed vhost config against the canonical template
+# =============================================================================
+
+@test "apache_audit_vhost_config reports OK when forwarded headers are present" {
+    run apache_audit_vhost_config "example.com" "$(apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html")"
+    assert_output --partial "[OK]    X-Forwarded-Proto header present"
+    assert_output --partial "[OK]    X-Forwarded-Port header present"
+}
+
+@test "apache_audit_vhost_config reports DRIFT when forwarded headers are missing" {
+    local legacy_config="<VirtualHost *:80>
+    ServerName example.com
+    ProxyPass / http://localhost:3000/
+    ErrorLog /var/www/example.com/logs/error.log
+    CustomLog /var/www/example.com/logs/access.log combined
+</VirtualHost>"
+    run apache_audit_vhost_config "example.com" "$legacy_config"
+    assert_failure
+    assert_output --partial "[DRIFT] X-Forwarded-Proto header missing"
+    assert_output --partial "[DRIFT] X-Forwarded-Port header missing"
+}
+
+@test "apache_audit_vhost_config reports OK when log paths match the canonical template" {
+    run apache_audit_vhost_config "example.com" "$(apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html")"
+    assert_output --partial "[OK]    ErrorLog matches canonical path"
+    assert_output --partial "[OK]    CustomLog matches canonical path"
+}
+
+@test "apache_audit_vhost_config reports DRIFT for manually rotated log paths" {
+    local drifted_config='<VirtualHost *:80>
+    ServerName example.com
+    ProxyPass / http://localhost:3000/
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+    ErrorLog "| /usr/bin/rotatelogs /var/log/apache2/example.com/error_%Y-%m-%d.log 86400"
+    CustomLog /var/log/apache2/example.com/access.log combined
+</VirtualHost>'
+    run apache_audit_vhost_config "example.com" "$drifted_config"
+    assert_failure
+    assert_output --partial "[DRIFT] ErrorLog does not match canonical path"
+    assert_output --partial "[DRIFT] CustomLog does not match canonical path"
+}
+
+@test "apache_audit_vhost_config does not false-positive match ErrorLogFormat as ErrorLog" {
+    local config='<VirtualHost *:80>
+    ServerName example.com
+    ProxyPass / http://localhost:3000/
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port "443"
+    ErrorLogFormat "[%{u}t] [%-m:%l] %7F: %E: [client\ %a] %M"
+    ErrorLog /var/www/example.com/logs/error.log
+    CustomLog /var/www/example.com/logs/access.log combined
+</VirtualHost>'
+    run apache_audit_vhost_config "example.com" "$config"
+    assert_success
+    assert_output --partial "[OK]    ErrorLog matches canonical path"
+}
+
+@test "apache_audit_vhost_config skips redirect-only vhosts instead of reporting false drift" {
+    run apache_audit_vhost_config "old.example.com" "$(apache_generate_redirect_config "old.example.com" "https://new.example.com" "301")"
+    assert_success
+    assert_output --partial "[SKIP]"
+    refute_output --partial "[DRIFT]"
+}
+
+@test "apache_audit_vhost_config under strict mode (set -euo pipefail) does not abort on a config with no log lines at all" {
+    run bash -c "set -euo pipefail; source '${PROJECT_ROOT}/lib/webserver/apache.sh'; apache_audit_vhost_config example.com 'ProxyPass / http://localhost:3000/'"
+    assert_failure
+    assert_output --partial "[DRIFT] X-Forwarded-Proto header missing"
+    assert_output --partial "[DRIFT] X-Forwarded-Port header missing"
+    assert_output --partial "[DRIFT] ErrorLog does not match canonical path"
+    assert_output --partial "[DRIFT] CustomLog does not match canonical path"
+}
+
+@test "apache_audit_vhost_config returns success when config has no drift" {
+    run apache_audit_vhost_config "example.com" "$(apache_generate_vhost_config "example.com" "" "8.3" "/var/www/example.com/html")"
+    assert_success
+}
+
+@test "apache_audit_vhost_config returns failure when any check drifts" {
+    run apache_audit_vhost_config "example.com" "<VirtualHost *:80>
+    ProxyPass / http://localhost:3000/
+</VirtualHost>"
+    assert_failure
+}
+
+@test "apache_audit_vhost_config passes for a freshly generated proxy vhost (generator/auditor stay in sync)" {
+    export ST_PROXY_PRESERVE_HOST=true
+    run apache_audit_vhost_config "app.example.com" "$(apache_generate_proxy_config "app.example.com" "" "http://localhost:3000" "true" "true")"
+    assert_success
+}
