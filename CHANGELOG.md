@@ -24,6 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 - Nothing yet
 
+## [2.5.0] - 2026-09-11
+
+### Added
+- add 'vhost audit' to surface template drift (#13) (#17)
+- add Nginx support for vhost management (#11) (#19)
+
+### Fixed
+- stop truncating www/HTTPS redirect snippets to a comment (#18) (#20)
+
 ## [2.4.1] - 2026-09-10
 
 ### Added
@@ -133,7 +142,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Interactive menu system
 - Single-file architecture
 
-[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.4.1...HEAD
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.5.0...HEAD
 [2.0.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.0.0
 [2.1.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.0
 [2.1.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.1
@@ -143,3 +152,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 [2.3.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.3.1
 [2.4.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.4.0
 [2.4.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.4.1
+[2.5.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.5.0
