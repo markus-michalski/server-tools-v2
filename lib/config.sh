@@ -15,6 +15,11 @@ ST_AUDIT_LOG="${ST_AUDIT_LOG:-/var/log/server-tools-audit.log}"
 ST_BACKUP_DIR="${ST_BACKUP_DIR:-/root/server-tools-backups}"
 ST_CONFIG_FILE="${ST_CONFIG_FILE:-/etc/server-tools/config}"
 
+# Installation targets (install/uninstall; overridable so tests and
+# packaging can target a non-system prefix instead of /usr/local)
+ST_INSTALL_DIR="${ST_INSTALL_DIR:-/usr/local/lib/server-tools}"
+ST_BIN_DIR="${ST_BIN_DIR:-/usr/local/bin}"
+
 # PHP
 ST_DEFAULT_PHP_VERSION="${ST_DEFAULT_PHP_VERSION:-8.3}"
 ST_PHP_VERSIONS_TO_SCAN="${ST_PHP_VERSIONS_TO_SCAN:-7.4 8.0 8.1 8.2 8.3 8.4}"

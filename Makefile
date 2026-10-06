@@ -1,28 +1,17 @@
-.PHONY: help install test test-verbose lint format format-check check clean setup-tests
+.PHONY: help install uninstall test test-verbose lint format format-check check clean setup-tests
 
 SHELL := /bin/bash
 PROJECT_ROOT := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
-VERSION := $(shell git describe --tags --always 2>/dev/null || echo "dev")
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 install: ## Install server-tools system-wide (requires root)
-	@if [ "$$(id -u)" -ne 0 ]; then echo "Error: install requires root"; exit 1; fi
-	install -d /usr/local/lib/server-tools/webserver
-	install -m 644 lib/*.sh /usr/local/lib/server-tools/
-	install -m 644 lib/webserver/*.sh /usr/local/lib/server-tools/webserver/
-	echo "$(VERSION)" > /usr/local/lib/server-tools/.version
-	install -m 755 bin/server-tools /usr/local/bin/server-tools
-	ln -sf /usr/local/bin/server-tools /usr/local/bin/st
-	@echo "Installed server-tools $(VERSION)"
+	@"$(PROJECT_ROOT)bin/server-tools" install
 
-uninstall: ## Remove server-tools from system
-	@if [ "$$(id -u)" -ne 0 ]; then echo "Error: uninstall requires root"; exit 1; fi
-	rm -f /usr/local/bin/server-tools /usr/local/bin/st
-	rm -rf /usr/local/lib/server-tools
-	@echo "Uninstalled server-tools"
+uninstall: ## Remove server-tools from system (requires root)
+	@"$(PROJECT_ROOT)bin/server-tools" uninstall
 
 setup-tests: ## Install BATS test dependencies
 	@if [ ! -d tests/libs/bats-support ]; then \
