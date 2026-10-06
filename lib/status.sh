@@ -79,7 +79,9 @@ show_service_status() {
     local services="apache2 mysql"
     for service in $services; do
         local status
-        status=$(check_service "$service")
+        # check_service returns 1 for anything not running; under the entry
+        # point's set -e that would abort the whole status display
+        status=$(check_service "$service") || true
         local color=""
         local reset=""
         if [[ -z "${NO_COLOR:-}" ]]; then
@@ -100,7 +102,7 @@ show_service_status() {
         local fpm_service="php${version}-fpm"
         if systemctl list-unit-files "${fpm_service}.service" &>/dev/null 2>&1; then
             local status
-            status=$(check_service "$fpm_service")
+            status=$(check_service "$fpm_service") || true
             local color=""
             local reset=""
             if [[ -z "${NO_COLOR:-}" ]]; then
@@ -138,7 +140,11 @@ show_system_resources() {
 
 # Show combined full status (replaces old system_info)
 show_full_status() {
-    clear
+    # Only clear on a real terminal: clear exits 1 without a usable TERM
+    # (ssh without tty, cron, CI), which aborts under set -e
+    if [[ -t 1 ]]; then
+        clear || true
+    fi
     show_service_status
     echo ""
     show_system_resources

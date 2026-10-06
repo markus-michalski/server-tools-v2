@@ -116,6 +116,34 @@ teardown() {
     assert_output --partial "mysql"
 }
 
+@test "show_service_status survives stopped and missing services under set -e" {
+    # bin/server-tools runs with set -euo pipefail; check_service returns 1 for
+    # anything not running, which used to abort the whole status display.
+    mock_command "systemctl" '
+        if [[ "$1" == "list-unit-files" ]]; then
+            [[ "$2" == "mysql.service" ]] && exit 1
+            exit 0
+        elif [[ "$1" == "is-active" ]]; then
+            exit 3
+        fi
+    '
+    run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; show_service_status; echo REACHED_END"
+    assert_success
+    assert_output --regexp 'apache2 +stopped'
+    assert_output --regexp 'mysql +not installed'
+    assert_output --partial "REACHED_END"
+}
+
+@test "show_full_status survives an unusable terminal under set -e" {
+    # clear exits 1 when TERM is unset/dumb (ssh without tty, cron, CI), which
+    # used to kill `server-tools status` before anything was printed.
+    mock_command "systemctl" 'exit 0'
+    run env -u TERM bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status; echo REACHED_END"
+    assert_success
+    assert_output --partial "Service Status"
+    assert_output --partial "REACHED_END"
+}
+
 # --- show_system_resources ---
 
 @test "show_system_resources includes all sections" {
