@@ -64,16 +64,18 @@ jobs:
       - name: make install, then run the installed binary
         run: |
           sudo make install
-          /usr/local/bin/server-tools --version
-          /usr/local/bin/st --version
-          /usr/local/bin/servertools --version
+          # The binary is mode 700 (root-only, by design -- see lib/install.sh)
+          # so it's always invoked via sudo, exactly as README.md documents.
+          sudo /usr/local/bin/server-tools --version
+          sudo /usr/local/bin/st --version
+          sudo /usr/local/bin/servertools --version
           test -f /usr/local/lib/server-tools/webserver/apache.sh
           test -f /usr/local/lib/server-tools/webserver/nginx.sh
           # Regression guard: a swallowed `git describe` failure (e.g. the
           # "dubious ownership" check tripping because install runs as root
           # in a checkout owned by the actions runner user) must not pass
           # unnoticed as a silent "dev" version.
-          ! /usr/local/bin/server-tools --version | grep -qx "server-tools dev"
+          ! sudo /usr/local/bin/server-tools --version | grep -qx "server-tools dev"
 
       - name: make uninstall, then verify nothing is left behind
         run: |
@@ -86,12 +88,12 @@ jobs:
       - name: sudo ./bin/server-tools install (the documented path), then verify
         run: |
           sudo ./bin/server-tools install
-          server-tools --version
-          st --version
-          servertools --version
+          sudo /usr/local/bin/server-tools --version
+          sudo /usr/local/bin/st --version
+          sudo /usr/local/bin/servertools --version
           test -f /usr/local/lib/server-tools/webserver/apache.sh
           test -f /usr/local/lib/server-tools/webserver/nginx.sh
-          ! server-tools --version | grep -qx "server-tools dev"
+          ! sudo /usr/local/bin/server-tools --version | grep -qx "server-tools dev"
 
       - name: sudo ./bin/server-tools uninstall, then verify nothing is left behind
         run: |
