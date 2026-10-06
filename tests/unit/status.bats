@@ -129,10 +129,18 @@ teardown() {
     '
     run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; show_service_status; echo REACHED_END"
     assert_success
-    assert_output --partial "apache2"
-    assert_output --partial "stopped"
-    assert_output --partial "mysql"
-    assert_output --partial "not installed"
+    assert_output --regexp 'apache2 +stopped'
+    assert_output --regexp 'mysql +not installed'
+    assert_output --partial "REACHED_END"
+}
+
+@test "show_full_status survives an unusable terminal under set -e" {
+    # clear exits 1 when TERM is unset/dumb (ssh without tty, cron, CI), which
+    # used to kill `server-tools status` before anything was printed.
+    mock_command "systemctl" 'exit 0'
+    run env -u TERM bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status; echo REACHED_END"
+    assert_success
+    assert_output --partial "Service Status"
     assert_output --partial "REACHED_END"
 }
 

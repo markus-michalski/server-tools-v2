@@ -140,7 +140,11 @@ show_system_resources() {
 
 # Show combined full status (replaces old system_info)
 show_full_status() {
-    clear
+    # Only clear on a real terminal: clear exits 1 without a usable TERM
+    # (ssh without tty, cron, CI), which aborts under set -e
+    if [[ -t 1 ]]; then
+        clear || true
+    fi
     show_service_status
     echo ""
     show_system_resources
