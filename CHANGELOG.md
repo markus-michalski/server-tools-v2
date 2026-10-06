@@ -7,16 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- `server-tools uninstall` command, and a CI job that exercises both
-  `make install`/`make uninstall` and `./bin/server-tools install`/`uninstall`
-  against real system paths on every push (#23)
+- Nothing yet
 
 ### Changed
-- `make install`/`make uninstall` now delegate to `bin/server-tools
-  install`/`uninstall` instead of duplicating the installer logic -- the two
-  had drifted apart (binary mode/owner, missing shortcut, missing `.version`
-  marker, missing config/credential/backup/audit directory setup), which is
-  how the `lib/webserver/*.sh` installer gap below went unnoticed (#22)
+- Nothing yet
 
 ### Deprecated
 - Nothing yet
@@ -25,28 +19,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nothing yet
 
 ### Fixed
-- `make install` now also installs `lib/webserver/*.sh`; previously only
-  `lib/*.sh` was copied, so installs done via `make install` (not the
-  documented `./bin/server-tools install`, which already handled this)
-  failed at startup when `lib/vhost.sh` sourced `webserver/apache.sh`
-  (since Nginx support landed in 2.5.0, #11/#19)
-- Uninstalling no longer leaves a dangling `servertools` symlink behind --
-  it was created by `install_tools` but only `server-tools`/`st` were ever
-  removed (#24)
-- An installed copy of server-tools now writes a `.version` marker, so
-  `server-tools --version` reports the real installed version instead of
-  permanently falling back to `dev` (there is no git repo at the install
-  location to describe); version detection also no longer silently reports
-  `dev` when git's "dubious ownership" check trips under root
-- `uninstall` now only ever removes paths that actually look like a
-  server-tools install (and only removes the `st`/`servertools` shortcuts if
-  they're still our symlinks), refusing instead of recursively deleting an
-  unexpected `ST_INSTALL_DIR` value; `install` now fails fast with a clear
-  error if run from an already-installed copy instead of dying partway
-  through on a "same file" error
+- Nothing yet
 
 ### Security
 - Nothing yet
+
+## [2.5.1] - 2026-10-06
+
+### Fixed
+- consolidate make/bin/server-tools installers, fix symlink leak (#25)
+- install lib/webserver/*.sh with make install (#21)
 
 ## [2.5.0] - 2026-09-11
 
@@ -166,7 +148,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Interactive menu system
 - Single-file architecture
 
-[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/markus-michalski/server-tools-v2/compare/v2.5.1...HEAD
 [2.0.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.0.0
 [2.1.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.0
 [2.1.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.1.1
@@ -177,3 +159,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 [2.4.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.4.0
 [2.4.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.4.1
 [2.5.0]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.5.0
+[2.5.1]: https://github.com/markus-michalski/server-tools-v2/releases/tag/v2.5.1
