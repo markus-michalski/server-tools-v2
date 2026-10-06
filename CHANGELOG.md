@@ -19,6 +19,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nothing yet
 
 ### Fixed
+- `server-tools status` / the "System Status" menu entry now follow `ST_WEBSERVER`:
+  with `nginx` it checks the `nginx` service and shows the Nginx version
+  instead of reporting `apache2 not installed` and never mentioning Nginx
 - `server-tools status` (menu entry 9, "System Status") no longer aborts at
   the first service that isn't running: `check_service` returns 1 for stopped
   or missing services, which killed the whole display under the entry point's

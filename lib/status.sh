@@ -39,6 +39,15 @@ check_service() {
     fi
 }
 
+# Systemd service name of the selected webserver backend (ST_WEBSERVER)
+get_webserver_service() {
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "nginx"
+    else
+        echo "apache2"
+    fi
+}
+
 # Get disk usage summary
 get_disk_usage() {
     df -h --output=target,size,used,avail,pcent -x tmpfs -x devtmpfs 2>/dev/null \
@@ -76,7 +85,8 @@ show_service_status() {
     print_header "Service Status"
 
     # Core services
-    local services="apache2 mysql"
+    local services
+    services="$(get_webserver_service) mysql"
     for service in $services; do
         local status
         # check_service returns 1 for anything not running; under the entry
@@ -151,7 +161,12 @@ show_full_status() {
     echo ""
 
     echo "Software Versions:"
-    echo "  Apache:  $(apache2 -v 2>/dev/null | head -1 | cut -d' ' -f3 || echo 'not installed')"
+    if [[ "$(get_webserver_service)" == "nginx" ]]; then
+        # nginx -v prints "nginx version: nginx/1.22.1" to stderr
+        echo "  Nginx:   $(nginx -v 2>&1 | head -1 | sed -n 's|.*nginx/\([^ ]*\).*|\1|p' | grep . || echo 'not installed')"
+    else
+        echo "  Apache:  $(apache2 -v 2>/dev/null | head -1 | cut -d' ' -f3 || echo 'not installed')"
+    fi
     echo "  MySQL:   $(mysql --version 2>/dev/null | cut -d' ' -f6 | cut -d',' -f1 || echo 'not installed')"
 
     # PHP versions
