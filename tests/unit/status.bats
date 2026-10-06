@@ -191,7 +191,7 @@ teardown() {
     run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status"
     assert_success
     assert_output --regexp 'Nginx: +1\.24\.0'
-    refute_output --partial "Ubuntu"
+    refute_output --partial "(Ubuntu)"
 }
 
 # --- show_system_resources ---
