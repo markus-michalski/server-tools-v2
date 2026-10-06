@@ -167,10 +167,31 @@ teardown() {
     mock_command "systemctl" 'exit 0'
     # real nginx prints its version to stderr
     mock_command "nginx" 'echo "nginx version: nginx/1.22.1" >&2'
-    run bash -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status"
+    run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status; echo REACHED_END"
     assert_success
     assert_output --regexp 'Nginx: +1\.22\.1'
+    assert_output --partial "REACHED_END"
     refute_output --partial "Apache:"
+}
+
+@test "show_full_status reports nginx as not installed when nginx -v fails" {
+    export ST_WEBSERVER=nginx
+    mock_command "systemctl" 'exit 0'
+    mock_command "nginx" 'echo "nginx: [alert] could not open error log file" >&2; exit 1'
+    run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status; echo REACHED_END"
+    assert_success
+    assert_output --regexp 'Nginx: +not installed'
+    assert_output --partial "REACHED_END"
+}
+
+@test "show_full_status extracts the version from distro-suffixed nginx output" {
+    export ST_WEBSERVER=nginx
+    mock_command "systemctl" 'exit 0'
+    mock_command "nginx" 'echo "nginx version: nginx/1.24.0 (Ubuntu)" >&2'
+    run bash -euo pipefail -c "source '${PROJECT_ROOT}/lib/status.sh'; source '${PROJECT_ROOT}/lib/backup.sh'; source '${PROJECT_ROOT}/lib/vhost.sh'; show_full_status"
+    assert_success
+    assert_output --regexp 'Nginx: +1\.24\.0'
+    refute_output --partial "Ubuntu"
 }
 
 # --- show_system_resources ---

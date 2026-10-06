@@ -162,8 +162,12 @@ show_full_status() {
 
     echo "Software Versions:"
     if [[ "$(get_webserver_service)" == "nginx" ]]; then
-        # nginx -v prints "nginx version: nginx/1.22.1" to stderr
-        echo "  Nginx:   $(nginx -v 2>&1 | head -1 | sed -n 's|.*nginx/\([^ ]*\).*|\1|p' | grep . || echo 'not installed')"
+        # nginx -v prints "nginx version: nginx/1.22.1" to stderr. Capture with
+        # || true so a failing nginx can't abort under set -e / pipefail, and
+        # accept forks such as "freenginx/1.27.0" or "openresty/1.21.4.1".
+        local nginx_version
+        nginx_version=$(nginx -v 2>&1 | sed -n '1s|^nginx version: [^/]*/\([^ ]*\).*|\1|p') || true
+        echo "  Nginx:   ${nginx_version:-not installed}"
     else
         echo "  Apache:  $(apache2 -v 2>/dev/null | head -1 | cut -d' ' -f3 || echo 'not installed')"
     fi
