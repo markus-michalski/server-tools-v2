@@ -51,6 +51,16 @@ git checkout "$(git tag -l 'v*' | sort -V | tail -1)"
 sudo ./bin/server-tools install
 ```
 
+### Uninstalling
+
+```bash
+sudo server-tools uninstall
+```
+
+Removes the binary, the `st`/`servertools` shortcuts, and the installed
+libraries. Config (`/etc/server-tools/config`), credentials, backups and
+the audit log are left in place -- remove them manually if no longer needed.
+
 ### Manual Usage (without install)
 
 ```bash

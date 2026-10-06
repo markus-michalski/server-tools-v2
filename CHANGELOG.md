@@ -7,10 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- Nothing yet
+- `server-tools uninstall` command, and a CI job that exercises both
+  `make install`/`make uninstall` and `./bin/server-tools install`/`uninstall`
+  against real system paths on every push (#23)
 
 ### Changed
-- Nothing yet
+- `make install`/`make uninstall` now delegate to `bin/server-tools
+  install`/`uninstall` instead of duplicating the installer logic -- the two
+  had drifted apart (binary mode/owner, missing shortcut, missing `.version`
+  marker, missing config/credential/backup/audit directory setup), which is
+  how the `lib/webserver/*.sh` installer gap below went unnoticed (#22)
 
 ### Deprecated
 - Nothing yet
@@ -24,6 +30,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   documented `./bin/server-tools install`, which already handled this)
   failed at startup when `lib/vhost.sh` sourced `webserver/apache.sh`
   (since Nginx support landed in 2.5.0, #11/#19)
+- Uninstalling no longer leaves a dangling `servertools` symlink behind --
+  it was created by `install_tools` but only `server-tools`/`st` were ever
+  removed (#24)
+- An installed copy of server-tools now writes a `.version` marker, so
+  `server-tools --version` reports the real installed version instead of
+  permanently falling back to `dev` (there is no git repo at the install
+  location to describe); version detection also no longer silently reports
+  `dev` when git's "dubious ownership" check trips under root
+- `uninstall` now only ever removes paths that actually look like a
+  server-tools install (and only removes the `st`/`servertools` shortcuts if
+  they're still our symlinks), refusing instead of recursively deleting an
+  unexpected `ST_INSTALL_DIR` value; `install` now fails fast with a clear
+  error if run from an already-installed copy instead of dying partway
+  through on a "same file" error
 
 ### Security
 - Nothing yet

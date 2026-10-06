@@ -44,3 +44,59 @@ jobs:
 
       - name: Run tests
         run: bats tests/unit/*.bats
+
+  install-smoke-test:
+    runs-on: ubuntu-latest
+    name: Install Smoke Test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history (not the default shallow clone) so install_tools'
+          # `git describe --tags` resolves a real tag instead of falling
+          # back to a bare commit hash.
+          fetch-depth: 0
+
+      # Exercises both documented install entry points end to end against
+      # the real system paths they ship against -- this is what would have
+      # caught lib/webserver/ going missing from `make install` for 3+ weeks
+      # (#21) and is the install-path regression guard requested in #23.
+
+      - name: make install, then run the installed binary
+        run: |
+          sudo make install
+          /usr/local/bin/server-tools --version
+          /usr/local/bin/st --version
+          /usr/local/bin/servertools --version
+          test -f /usr/local/lib/server-tools/webserver/apache.sh
+          test -f /usr/local/lib/server-tools/webserver/nginx.sh
+          # Regression guard: a swallowed `git describe` failure (e.g. the
+          # "dubious ownership" check tripping because install runs as root
+          # in a checkout owned by the actions runner user) must not pass
+          # unnoticed as a silent "dev" version.
+          ! /usr/local/bin/server-tools --version | grep -qx "server-tools dev"
+
+      - name: make uninstall, then verify nothing is left behind
+        run: |
+          sudo make uninstall
+          test ! -e /usr/local/bin/server-tools
+          test ! -e /usr/local/bin/st
+          test ! -e /usr/local/bin/servertools
+          test ! -e /usr/local/lib/server-tools
+
+      - name: sudo ./bin/server-tools install (the documented path), then verify
+        run: |
+          sudo ./bin/server-tools install
+          server-tools --version
+          st --version
+          servertools --version
+          test -f /usr/local/lib/server-tools/webserver/apache.sh
+          test -f /usr/local/lib/server-tools/webserver/nginx.sh
+          ! server-tools --version | grep -qx "server-tools dev"
+
+      - name: sudo ./bin/server-tools uninstall, then verify nothing is left behind
+        run: |
+          sudo ./bin/server-tools uninstall
+          test ! -e /usr/local/bin/server-tools
+          test ! -e /usr/local/bin/st
+          test ! -e /usr/local/bin/servertools
+          test ! -e /usr/local/lib/server-tools
