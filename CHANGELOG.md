@@ -23,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the first service that isn't running: `check_service` returns 1 for stopped
   or missing services, which killed the whole display under the entry point's
   `set -e` and dropped the user back to the shell
-- Nothing yet
 
 ### Security
 - Nothing yet
