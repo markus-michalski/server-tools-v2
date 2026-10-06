@@ -19,7 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nothing yet
 
 ### Fixed
-- Nothing yet
+- `make install` now also installs `lib/webserver/*.sh`; previously only
+  `lib/*.sh` was copied, so installs done via `make install` (not the
+  documented `./bin/server-tools install`, which already handled this)
+  failed at startup when `lib/vhost.sh` sourced `webserver/apache.sh`
+  (since Nginx support landed in 2.5.0, #11/#19)
 
 ### Security
 - Nothing yet
