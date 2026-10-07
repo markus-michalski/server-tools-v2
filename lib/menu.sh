@@ -563,8 +563,8 @@ log_menu() {
 
     while $submenu; do
         show_menu "Log Viewer" \
-            "Show Apache errors" \
-            "Show Apache access log" \
+            "Show webserver errors" \
+            "Show webserver access log" \
             "Show MySQL errors" \
             "Show audit log" \
             "Search in logs" \
@@ -575,14 +575,14 @@ log_menu() {
                 local domain lines
                 read -r -p "Domain (empty for global): " domain
                 read -r -p "Lines to show [$ST_LOG_LINES]: " lines
-                show_apache_errors "$domain" "${lines:-$ST_LOG_LINES}" || true
+                show_webserver_errors "$domain" "${lines:-$ST_LOG_LINES}" || true
                 press_enter
                 ;;
             2)
                 local domain lines
                 read -r -p "Domain (empty for global): " domain
                 read -r -p "Lines to show [$ST_LOG_LINES]: " lines
-                show_apache_access "$domain" "${lines:-$ST_LOG_LINES}" || true
+                show_webserver_access "$domain" "${lines:-$ST_LOG_LINES}" || true
                 press_enter
                 ;;
             3)

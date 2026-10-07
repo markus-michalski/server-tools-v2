@@ -22,6 +22,7 @@ setup() {
     export ST_CREDENTIAL_FILE_PERMISSIONS=600
     export ST_CERTBOT_EMAIL="admin@example.com"
     export ST_APACHE_LOG_DIR="${TEST_TMPDIR}/apache-logs"
+    export ST_NGINX_LOG_DIR="${TEST_TMPDIR}/nginx-logs"
     export ST_MYSQL_LOG_FILE="${TEST_TMPDIR}/mysql-error.log"
     export ST_LOG_LINES=50
     export ST_DNS_PROVIDER=""
@@ -29,7 +30,7 @@ setup() {
     export ST_MONITORED_SERVICES="apache2 mysql"
     export ST_DEFAULT_CHARSET="utf8mb4"
     export ST_DEFAULT_COLLATION="utf8mb4_unicode_ci"
-    mkdir -p "${ST_CREDENTIAL_DIR}" "${ST_BACKUP_DIR}" "${ST_DB_BACKUP_DIR}" "${ST_APACHE_LOG_DIR}"
+    mkdir -p "${ST_CREDENTIAL_DIR}" "${ST_BACKUP_DIR}" "${ST_DB_BACKUP_DIR}" "${ST_APACHE_LOG_DIR}" "${ST_NGINX_LOG_DIR}"
     source_lib "cli"
 }
 
@@ -453,4 +454,53 @@ teardown() {
     # Pipe 'n' to simulate user declining
     run bash -c 'source "'"${PROJECT_ROOT}"'/lib/core.sh" && echo "n" | confirm "Continue?"'
     assert_failure
+}
+
+# =============================================================================
+# LOGS CLI - webserver-neutral actions (#28)
+# =============================================================================
+
+@test "cli_logs webserver-errors reads the Nginx log with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "[error] nginx boom" > "${ST_NGINX_LOG_DIR}/error.log"
+
+    run cli_logs webserver-errors --lines 5
+    assert_success
+    assert_output --partial "Nginx Errors (global)"
+    assert_output --partial "nginx boom"
+}
+
+@test "cli_logs webserver reads the Nginx access log with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "GET /nginx-hit" > "${ST_NGINX_LOG_DIR}/access.log"
+
+    run cli_logs webserver --lines 5
+    assert_success
+    assert_output --partial "Nginx Access (global)"
+    assert_output --partial "nginx-hit"
+}
+
+@test "cli_logs apache-errors alias follows ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "[error] nginx boom" > "${ST_NGINX_LOG_DIR}/error.log"
+
+    run cli_logs apache-errors --lines 5
+    assert_success
+    assert_output --partial "nginx boom"
+}
+
+@test "cli_logs apache-errors still reads Apache logs by default" {
+    unset ST_WEBSERVER
+    echo "[error] apache boom" > "${ST_APACHE_LOG_DIR}/error.log"
+
+    run cli_logs apache-errors --lines 5
+    assert_success
+    assert_output --partial "Apache Errors (global)"
+    assert_output --partial "apache boom"
+}
+
+@test "cli_logs help lists the webserver actions" {
+    run cli_logs --help
+    assert_success
+    assert_output --partial "webserver-errors"
 }

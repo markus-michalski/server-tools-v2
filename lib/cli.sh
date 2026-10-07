@@ -627,7 +627,7 @@ cli_logs() {
     shift 2>/dev/null || true
 
     case "$action" in
-        apache)
+        webserver | apache)
             local domain="" lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -640,19 +640,19 @@ cli_logs() {
                         shift 2
                         ;;
                     --errors)
-                        action="apache-errors"
+                        action="webserver-errors"
                         shift
                         ;;
                     *) shift ;;
                 esac
             done
-            if [[ "$action" == "apache-errors" ]]; then
-                show_apache_errors "$domain" "${lines:-$ST_LOG_LINES}"
+            if [[ "$action" == "webserver-errors" ]]; then
+                show_webserver_errors "$domain" "${lines:-$ST_LOG_LINES}"
             else
-                show_apache_access "$domain" "${lines:-$ST_LOG_LINES}"
+                show_webserver_access "$domain" "${lines:-$ST_LOG_LINES}"
             fi
             ;;
-        apache-errors)
+        webserver-errors | apache-errors)
             local domain="" lines=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
@@ -667,7 +667,7 @@ cli_logs() {
                     *) shift ;;
                 esac
             done
-            show_apache_errors "$domain" "${lines:-$ST_LOG_LINES}"
+            show_webserver_errors "$domain" "${lines:-$ST_LOG_LINES}"
             ;;
         mysql)
             local lines=""
@@ -722,14 +722,16 @@ cli_logs() {
 Usage: server-tools logs <action> [options]
 
 Actions:
-  apache        Show Apache access log
-  apache-errors Show Apache error log
-  mysql         Show MySQL error log
-  audit         Show audit log
-  search        Search across all logs
+  webserver        Show webserver access log (Apache or Nginx, per ST_WEBSERVER)
+  webserver-errors Show webserver error log (Apache or Nginx, per ST_WEBSERVER)
+  apache           Alias for 'webserver'
+  apache-errors    Alias for 'webserver-errors'
+  mysql            Show MySQL error log
+  audit            Show audit log
+  search           Search across all logs
 
 Common options:
-  --domain <domain>   Domain filter (Apache logs)
+  --domain <domain>   Domain filter (webserver logs)
   --lines <n>         Number of lines (default: $ST_LOG_LINES)
 
 Run 'server-tools logs <action> --help' for details.

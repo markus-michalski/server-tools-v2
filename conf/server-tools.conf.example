@@ -106,6 +106,9 @@
 # Apache log directory
 #ST_APACHE_LOG_DIR="/var/log/apache2"
 
+# Nginx log directory (used when ST_WEBSERVER=nginx)
+#ST_NGINX_LOG_DIR="/var/log/nginx"
+
 # MySQL error log file
 #ST_MYSQL_LOG_FILE="/var/log/mysql/error.log"
 

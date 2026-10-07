@@ -64,6 +64,7 @@ ST_LOGROTATE_ROTATE="${ST_LOGROTATE_ROTATE:-52}"
 
 # Logs
 ST_APACHE_LOG_DIR="${ST_APACHE_LOG_DIR:-/var/log/apache2}"
+ST_NGINX_LOG_DIR="${ST_NGINX_LOG_DIR:-/var/log/nginx}"
 ST_MYSQL_LOG_FILE="${ST_MYSQL_LOG_FILE:-/var/log/mysql/error.log}"
 ST_LOG_LINES="${ST_LOG_LINES:-50}"
 
