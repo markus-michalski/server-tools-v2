@@ -1,5 +1,5 @@
 #!/bin/bash
-# Log viewer library: view and search Apache, MySQL, and audit logs
+# Log viewer library: view and search webserver (Apache/Nginx), MySQL, and audit logs
 #
 # Architecture: building blocks + high-level operations
 # - Building blocks: file reading and searching primitives
@@ -58,19 +58,39 @@ grep_logfile() {
     grep -i -e "$pattern" -- "$file" 2>/dev/null | tail -n "$lines"
 }
 
+# Global log directory of the active webserver backend ($ST_WEBSERVER)
+_webserver_log_dir() {
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "$ST_NGINX_LOG_DIR"
+    else
+        echo "$ST_APACHE_LOG_DIR"
+    fi
+}
+
+# Display name of the active webserver backend
+_webserver_label() {
+    if [[ "${ST_WEBSERVER:-apache}" == "nginx" ]]; then
+        echo "Nginx"
+    else
+        echo "Apache"
+    fi
+}
+
 # Get the error log path for a domain
-get_apache_error_log() {
+get_webserver_error_log() {
     local domain="${1:-}"
+    local log_dir
+    log_dir=$(_webserver_log_dir)
 
     if [[ -n "$domain" ]]; then
-        # Domain-specific log
+        # Domain-specific log (written by both the Apache and Nginx vhost templates)
         local domain_log="/var/www/${domain}/logs/error.log"
         if [[ -f "$domain_log" ]]; then
             echo "$domain_log"
             return 0
         fi
-        # Fallback to apache log dir
-        local alt_log="${ST_APACHE_LOG_DIR}/${domain}-error.log"
+        # Fallback to the webserver's global log dir
+        local alt_log="${log_dir}/${domain}-error.log"
         if [[ -f "$alt_log" ]]; then
             echo "$alt_log"
             return 0
@@ -80,12 +100,14 @@ get_apache_error_log() {
     fi
 
     # Global error log
-    echo "${ST_APACHE_LOG_DIR}/error.log"
+    echo "${log_dir}/error.log"
 }
 
 # Get the access log path for a domain
-get_apache_access_log() {
+get_webserver_access_log() {
     local domain="${1:-}"
+    local log_dir
+    log_dir=$(_webserver_log_dir)
 
     if [[ -n "$domain" ]]; then
         local domain_log="/var/www/${domain}/logs/access.log"
@@ -93,7 +115,7 @@ get_apache_access_log() {
             echo "$domain_log"
             return 0
         fi
-        local alt_log="${ST_APACHE_LOG_DIR}/${domain}-access.log"
+        local alt_log="${log_dir}/${domain}-access.log"
         if [[ -f "$alt_log" ]]; then
             echo "$alt_log"
             return 0
@@ -102,25 +124,31 @@ get_apache_access_log() {
         return 1
     fi
 
-    echo "${ST_APACHE_LOG_DIR}/access.log"
+    echo "${log_dir}/access.log"
 }
+
+# Backward-compatible names: they follow $ST_WEBSERVER like the neutral ones
+get_apache_error_log() { get_webserver_error_log "$@"; }
+get_apache_access_log() { get_webserver_access_log "$@"; }
 
 # =============================================================================
 # HIGH-LEVEL OPERATIONS - compose building blocks
 # =============================================================================
 
-# Show Apache error log entries
-show_apache_errors() {
+# Show webserver (Apache or Nginx, per $ST_WEBSERVER) error log entries
+show_webserver_errors() {
     local domain="${1:-}"
     local lines="${2:-$ST_LOG_LINES}"
+    local label
+    label=$(_webserver_label)
 
     local log_file
-    log_file=$(get_apache_error_log "$domain") || return 1
+    log_file=$(get_webserver_error_log "$domain") || return 1
 
     if [[ -n "$domain" ]]; then
-        print_header "Apache Errors: $domain"
+        print_header "$label Errors: $domain"
     else
-        print_header "Apache Errors (global)"
+        print_header "$label Errors (global)"
     fi
 
     echo "File: $log_file"
@@ -129,18 +157,20 @@ show_apache_errors() {
     tail_logfile "$log_file" "$lines" || echo "  (no entries)"
 }
 
-# Show Apache access log entries
-show_apache_access() {
+# Show webserver (Apache or Nginx, per $ST_WEBSERVER) access log entries
+show_webserver_access() {
     local domain="${1:-}"
     local lines="${2:-$ST_LOG_LINES}"
+    local label
+    label=$(_webserver_label)
 
     local log_file
-    log_file=$(get_apache_access_log "$domain") || return 1
+    log_file=$(get_webserver_access_log "$domain") || return 1
 
     if [[ -n "$domain" ]]; then
-        print_header "Apache Access: $domain"
+        print_header "$label Access: $domain"
     else
-        print_header "Apache Access (global)"
+        print_header "$label Access (global)"
     fi
 
     echo "File: $log_file"
@@ -148,6 +178,10 @@ show_apache_access() {
     echo "---"
     tail_logfile "$log_file" "$lines" || echo "  (no entries)"
 }
+
+# Backward-compatible names: they follow $ST_WEBSERVER like the neutral ones
+show_apache_errors() { show_webserver_errors "$@"; }
+show_apache_access() { show_webserver_access "$@"; }
 
 # Show MySQL error log
 show_mysql_errors() {
@@ -198,13 +232,14 @@ search_logs() {
 
     local found=0
 
-    # Apache error log
-    local apache_error="${ST_APACHE_LOG_DIR}/error.log"
-    if [[ -f "$apache_error" ]]; then
+    # Webserver error log (Apache or Nginx, per $ST_WEBSERVER)
+    local webserver_error
+    webserver_error="$(_webserver_log_dir)/error.log"
+    if [[ -f "$webserver_error" ]]; then
         local results
-        results=$(grep_logfile "$apache_error" "$pattern" "$lines")
+        results=$(grep_logfile "$webserver_error" "$pattern" "$lines")
         if [[ -n "$results" ]]; then
-            echo "--- Apache Error Log ---"
+            echo "--- $(_webserver_label) Error Log ---"
             echo "$results"
             echo ""
             found=1

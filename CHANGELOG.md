@@ -19,6 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Nothing yet
 
 ### Fixed
+- The log viewer now follows `ST_WEBSERVER` (#28): with `nginx`, the log
+  commands, menu entries and `logs search` read the Nginx logs instead of
+  Apache paths that do not exist on an Nginx host. New `logs webserver` /
+  `logs webserver-errors` actions (`apache` / `apache-errors` stay as aliases)
+  and a new `ST_NGINX_LOG_DIR` setting (default `/var/log/nginx`)
 - `server-tools status` / the "System Status" menu entry now follow `ST_WEBSERVER`:
   with `nginx` it checks the `nginx` service and shows the Nginx version
   instead of reporting `apache2 not installed` and never mentioning Nginx

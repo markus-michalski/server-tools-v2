@@ -17,9 +17,10 @@ setup() {
     export ST_ALLOWED_DOCROOT_PATHS="/var/www:/srv/www"
     export ST_CREDENTIAL_FILE_PERMISSIONS=600
     export ST_APACHE_LOG_DIR="${TEST_TMPDIR}/apache-logs"
+    export ST_NGINX_LOG_DIR="${TEST_TMPDIR}/nginx-logs"
     export ST_MYSQL_LOG_FILE="${TEST_TMPDIR}/mysql-error.log"
     export ST_LOG_LINES=50
-    mkdir -p "${ST_CREDENTIAL_DIR}" "${ST_BACKUP_DIR}" "${ST_APACHE_LOG_DIR}"
+    mkdir -p "${ST_CREDENTIAL_DIR}" "${ST_BACKUP_DIR}" "${ST_APACHE_LOG_DIR}" "${ST_NGINX_LOG_DIR}"
     source_lib "log"
 }
 
@@ -195,6 +196,104 @@ EOF
     assert_output --partial "Apache Error Log"
     assert_output --partial "MySQL Error Log"
     assert_output --partial "Audit Log"
+}
+
+# --- webserver-aware logs (#28) ---
+
+@test "get_webserver_error_log defaults to the Apache log dir when ST_WEBSERVER is unset" {
+    # config.sh defaults ST_WEBSERVER on source, so unset it after sourcing
+    unset ST_WEBSERVER
+    run get_webserver_error_log
+    assert_success
+    assert_output "${ST_APACHE_LOG_DIR}/error.log"
+}
+
+@test "get_webserver_error_log falls back to Apache for an unknown ST_WEBSERVER value" {
+    export ST_WEBSERVER=lighttpd
+    run get_webserver_error_log
+    assert_success
+    assert_output "${ST_APACHE_LOG_DIR}/error.log"
+}
+
+@test "show_webserver_errors keeps the Apache label for an unknown ST_WEBSERVER value" {
+    export ST_WEBSERVER=lighttpd
+    echo "[error] apache boom" > "${ST_APACHE_LOG_DIR}/error.log"
+
+    run show_webserver_errors "" 10
+    assert_success
+    assert_output --partial "Apache Errors (global)"
+}
+
+@test "get_webserver_error_log uses the Nginx log dir with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run get_webserver_error_log
+    assert_success
+    assert_output "${ST_NGINX_LOG_DIR}/error.log"
+}
+
+@test "get_webserver_access_log uses the Nginx log dir with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    run get_webserver_access_log
+    assert_success
+    assert_output "${ST_NGINX_LOG_DIR}/access.log"
+}
+
+@test "get_webserver_error_log falls back to <domain>-error.log in the Nginx log dir" {
+    export ST_WEBSERVER=nginx
+    echo "x" > "${ST_NGINX_LOG_DIR}/example.test-error.log"
+    run get_webserver_error_log "example.test"
+    assert_success
+    assert_output "${ST_NGINX_LOG_DIR}/example.test-error.log"
+}
+
+@test "get_apache_error_log stays an alias that follows ST_WEBSERVER" {
+    export ST_WEBSERVER=nginx
+    run get_apache_error_log
+    assert_success
+    assert_output "${ST_NGINX_LOG_DIR}/error.log"
+}
+
+@test "show_webserver_errors labels and reads the Nginx log with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "[error] nginx boom" > "${ST_NGINX_LOG_DIR}/error.log"
+    echo "[error] apache boom" > "${ST_APACHE_LOG_DIR}/error.log"
+
+    run show_webserver_errors "" 10
+    assert_success
+    assert_output --partial "Nginx Errors (global)"
+    assert_output --partial "nginx boom"
+    refute_output --partial "apache boom"
+}
+
+@test "show_webserver_access labels and reads the Nginx log with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "GET /nginx-hit" > "${ST_NGINX_LOG_DIR}/access.log"
+
+    run show_webserver_access "" 10
+    assert_success
+    assert_output --partial "Nginx Access (global)"
+    assert_output --partial "nginx-hit"
+}
+
+@test "show_webserver_errors keeps the Apache label by default" {
+    echo "[error] apache boom" > "${ST_APACHE_LOG_DIR}/error.log"
+
+    run show_webserver_errors "" 10
+    assert_success
+    assert_output --partial "Apache Errors (global)"
+    assert_output --partial "apache boom"
+}
+
+@test "search_logs searches the Nginx error log with ST_WEBSERVER=nginx" {
+    export ST_WEBSERVER=nginx
+    echo "[error] nginx problem" > "${ST_NGINX_LOG_DIR}/error.log"
+    echo "[error] apache problem" > "${ST_APACHE_LOG_DIR}/error.log"
+
+    run search_logs "problem" 10
+    assert_success
+    assert_output --partial "Nginx Error Log"
+    assert_output --partial "nginx problem"
+    refute_output --partial "apache problem"
 }
 
 @test "search_logs reports no matches" {

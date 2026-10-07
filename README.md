@@ -11,7 +11,7 @@ A modular Bash toolkit for managing MySQL databases, Apache virtual hosts, Let's
 - **Security** - Input validation, audit logging, automatic backups before destructive operations
 - **Firewall Management** - UFW firewall rules via CLI and interactive menu
 - **Fail2Ban Management** - Jail status, ban/unban IPs, configuration overview
-- **Log Viewer** - View and search Apache, MySQL, and audit logs
+- **Log Viewer** - View and search webserver (Apache or Nginx, per `ST_WEBSERVER`), MySQL, and audit logs
 - **System Status** - Overview of services, disk usage, and system health
 - **Interactive Menu** - TUI-based menu system for easy server administration
 

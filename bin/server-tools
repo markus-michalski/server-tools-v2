@@ -71,7 +71,7 @@ EXAMPLES:
   server-tools user add-key --username dev1 --key "ssh-ed25519 ..."
   server-tools firewall allow --port 8080 --proto tcp
   server-tools fail2ban status
-  server-tools logs apache --domain example.com --lines 100
+  server-tools logs webserver --domain example.com --lines 100
   server-tools status
 
 CONFIGURATION:
