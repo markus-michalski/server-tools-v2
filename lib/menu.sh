@@ -599,10 +599,11 @@ log_menu() {
                 press_enter
                 ;;
             5)
-                local pattern lines
+                local pattern domain lines
                 read -r -p "Search pattern: " pattern
+                read -r -p "Domain (empty for global, MySQL and audit logs): " domain
                 read -r -p "Max results [$ST_LOG_LINES]: " lines
-                search_logs "$pattern" "${lines:-$ST_LOG_LINES}" || true
+                search_logs "$pattern" "${lines:-$ST_LOG_LINES}" "$domain" || true
                 press_enter
                 ;;
             6)

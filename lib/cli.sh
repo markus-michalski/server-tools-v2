@@ -700,11 +700,15 @@ cli_logs() {
             show_audit_log_entries "${lines:-$ST_LOG_LINES}" "$filter"
             ;;
         search)
-            local pattern="" lines=""
+            local pattern="" lines="" domain=""
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --pattern)
                         pattern="$2"
+                        shift 2
+                        ;;
+                    --domain)
+                        domain="$2"
                         shift 2
                         ;;
                     --lines)
@@ -714,8 +718,8 @@ cli_logs() {
                     *) shift ;;
                 esac
             done
-            [[ -z "$pattern" ]] && cli_usage "logs search" "--pattern <text> [--lines <n>]"
-            search_logs "$pattern" "${lines:-$ST_LOG_LINES}"
+            [[ -z "$pattern" ]] && cli_usage "logs search" "--pattern <text> [--domain <domain>] [--lines <n>]"
+            search_logs "$pattern" "${lines:-$ST_LOG_LINES}" "$domain"
             ;;
         --help | -h | "")
             cat <<EOF
@@ -728,10 +732,11 @@ Actions:
   apache-errors    Alias for 'webserver-errors'
   mysql            Show MySQL error log
   audit            Show audit log
-  search           Search across all logs
+  search           Search the global webserver error, MySQL and audit logs
+                   (with --domain: that domain's error and access logs)
 
 Common options:
-  --domain <domain>   Domain filter (webserver logs)
+  --domain <domain>   Domain filter (webserver logs, search)
   --lines <n>         Number of lines (default: $ST_LOG_LINES)
 
 Run 'server-tools logs <action> --help' for details.

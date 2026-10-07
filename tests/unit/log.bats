@@ -305,3 +305,79 @@ EOF
     assert_success
     assert_output --partial "No matches found"
 }
+
+# --- search_logs per domain (#30) ---
+
+@test "search_logs with a domain searches that domain's error and access logs (Apache)" {
+    export ST_WEBSERVER=apache
+    echo "[error] app problem" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+    echo '1.2.3.4 "GET /problem" 500' > "${ST_APACHE_LOG_DIR}/example-test.invalid-access.log"
+
+    run search_logs "problem" 10 "example-test.invalid"
+    assert_success
+    assert_output --partial "Error Log: example-test.invalid"
+    assert_output --partial "app problem"
+    assert_output --partial "Access Log: example-test.invalid"
+    assert_output --partial "GET /problem"
+}
+
+@test "search_logs with a domain searches that domain's error and access logs (Nginx)" {
+    export ST_WEBSERVER=nginx
+    echo "[error] app problem" > "${ST_NGINX_LOG_DIR}/example-test.invalid-error.log"
+    echo '1.2.3.4 "GET /problem" 500' > "${ST_NGINX_LOG_DIR}/example-test.invalid-access.log"
+    echo "[error] apache problem" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+
+    run search_logs "problem" 10 "example-test.invalid"
+    assert_success
+    assert_output --partial "app problem"
+    assert_output --partial "GET /problem"
+    refute_output --partial "apache problem"
+}
+
+@test "search_logs with a domain skips the global, MySQL and audit logs" {
+    echo "[error] app problem" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+    echo "[error] global problem" > "${ST_APACHE_LOG_DIR}/error.log"
+    echo "[error] mysql problem" > "$ST_MYSQL_LOG_FILE"
+    echo "[INFO] audit problem" > "$ST_AUDIT_LOG"
+
+    run search_logs "problem" 10 "example-test.invalid"
+    assert_success
+    assert_output --partial "app problem"
+    refute_output --partial "global problem"
+    refute_output --partial "mysql problem"
+    refute_output --partial "audit problem"
+}
+
+@test "search_logs with a domain works when only one of its logs exists" {
+    echo "[error] app problem" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+
+    run search_logs "problem" 10 "example-test.invalid"
+    assert_success
+    assert_output --partial "app problem"
+}
+
+@test "search_logs with an unknown domain fails" {
+    run search_logs "problem" 10 "nonexistent-domain-$$.test"
+    assert_failure
+    assert_output --partial "No logs found for domain"
+}
+
+@test "search_logs with a domain reports no matches" {
+    echo "[error] fine" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+
+    run search_logs "zzz_nonexistent_pattern" 10 "example-test.invalid"
+    assert_success
+    assert_output --partial "No matches found"
+}
+
+@test "search_logs without a domain keeps searching global, MySQL and audit only" {
+    echo "[error] global problem" > "${ST_APACHE_LOG_DIR}/error.log"
+    echo "[error] app problem" > "${ST_APACHE_LOG_DIR}/example-test.invalid-error.log"
+    echo "[error] mysql problem" > "$ST_MYSQL_LOG_FILE"
+
+    run search_logs "problem" 10
+    assert_success
+    assert_output --partial "global problem"
+    assert_output --partial "mysql problem"
+    refute_output --partial "app problem"
+}

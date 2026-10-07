@@ -218,14 +218,60 @@ show_audit_log_entries() {
     fi
 }
 
-# Search across multiple log files
+# Search the error and access log of a single domain
+_search_domain_logs() {
+    local pattern="$1"
+    local lines="$2"
+    local domain="$3"
+
+    local error_log access_log
+    error_log=$(get_webserver_error_log "$domain" 2>/dev/null) || error_log=""
+    access_log=$(get_webserver_access_log "$domain" 2>/dev/null) || access_log=""
+
+    if [[ -z "$error_log" && -z "$access_log" ]]; then
+        log_error "No logs found for domain: $domain"
+        return 1
+    fi
+
+    print_header "Log Search: $pattern ($domain)"
+
+    local found=0 log_file label results
+    for label in "Error" "Access"; do
+        if [[ "$label" == "Error" ]]; then
+            log_file="$error_log"
+        else
+            log_file="$access_log"
+        fi
+        [[ -n "$log_file" ]] || continue
+
+        results=$(grep_logfile "$log_file" "$pattern" "$lines")
+        if [[ -n "$results" ]]; then
+            echo "--- $label Log: $domain ---"
+            echo "$results"
+            echo ""
+            found=1
+        fi
+    done
+
+    if [[ $found -eq 0 ]]; then
+        echo "No matches found for: $pattern"
+    fi
+}
+
+# Search across multiple log files, or one domain's logs when a domain is given
 search_logs() {
     local pattern="$1"
     local lines="${2:-$ST_LOG_LINES}"
+    local domain="${3:-}"
 
     if [[ -z "$pattern" ]]; then
         log_error "Search pattern is required"
         return 1
+    fi
+
+    if [[ -n "$domain" ]]; then
+        _search_domain_logs "$pattern" "$lines" "$domain"
+        return
     fi
 
     print_header "Log Search: $pattern"
